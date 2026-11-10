@@ -191,8 +191,9 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
     fun warnOnceOnFirstUse(project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val warning = firstUseWarning(SfSettings.getInstance().powerShell) ?: return@executeOnPooledThread
-                val lines = warning.problems.map { describe(it, warning.report[it]) }
+                val interpreter = SfSettings.getInstance().powerShell
+                val warning = firstUseWarning(interpreter) ?: return@executeOnPooledThread
+                val lines = warning.problems.map { describe(it, warning.report[it], interpreter) }
                 notify(project, SfBundle.message("env.firstUse.title"), lines.joinToString("<br>"),
                     NotificationType.WARNING, sdkLink = warning.report[EnvCheck.SDK].status != CheckStatus.OK)
             } catch (e: Throwable) {
@@ -234,8 +235,19 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
 
         fun checkName(check: EnvCheck): String = SfBundle.message(checkNameKey(check))
 
-        fun describe(check: EnvCheck, result: CheckResult): String =
-            "${checkName(check)}: ${SfBundle.message(statusKey(check, result.status))}"
+        fun describe(check: EnvCheck, result: CheckResult, interpreter: PowerShellInterpreter? = null): String {
+            val name = if (check == EnvCheck.MODULE && interpreter != null) {
+                "${checkName(check)} (${executableName(interpreter)})"
+            } else {
+                checkName(check)
+            }
+            return "$name: ${SfBundle.message(statusKey(check, result.status))}"
+        }
+
+        internal fun executableName(interpreter: PowerShellInterpreter): String = when (interpreter) {
+            PowerShellInterpreter.WINDOWS_POWERSHELL -> "powershell.exe"
+            PowerShellInterpreter.PWSH -> "pwsh.exe"
+        }
 
         fun notify(project: Project?, title: String, content: String, type: NotificationType, sdkLink: Boolean) {
             val notification = NotificationGroupManager.getInstance()

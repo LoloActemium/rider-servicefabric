@@ -21,11 +21,14 @@
                 key="settings.displayName"/>
         <notificationGroup id="Service Fabric" displayType="BALLOON" bundle="messages.SfBundle"
                            key="notification.group.name"/>
+        <solutionExplorerCustomization
+                implementation="ch.actemium.rider.servicefabric.detection.SfSolutionExplorerCustomization"/>
     </extensions>
 
     <actions>
         <group id="ServiceFabric.ProjectMenu"
                class="ch.actemium.rider.servicefabric.actions.SfProjectActionGroup"
+               icon="/icons/serviceFabric.svg"
                popup="true">
             <add-to-group group-id="SolutionExplorerPopupMenu" anchor="last"/>
             <action id="ServiceFabric.Package"

@@ -41,7 +41,6 @@ Le plugin s'appuie sur deux constats clés : la commande Build de Rider ne produ
 - Détection par flavor backend (`ServiceFabricProjectFlavor`), si l'extension ne suffit pas.
 - Assistant « Ajouter un service Service Fabric », templates de projets.
 - Gestion du cluster local (start/stop/reset), intégration Service Fabric Explorer.
-- Icône dédiée dans l'Explorer.
 - macOS / Linux.
 
 ## 4. Exigences fonctionnelles
@@ -50,6 +49,7 @@ Le plugin s'appuie sur deux constats clés : la commande Build de Rider ne produ
 
 - En V1, un projet est « SF » si son fichier a l'extension `.sfproj` (solutions `.sln` et `.slnx`).
 - Les actions F2/F3 ne sont visibles **que** sur ces projets.
+- Les projets SF chargés affichent une icône Service Fabric dans l'explorateur de solution (icône maison, pas le logo Microsoft).
 - Si le projet est déchargé, les actions sont visibles mais désactivées, avec une infobulle « Projet déchargé ».
 
 ### F2 — Package

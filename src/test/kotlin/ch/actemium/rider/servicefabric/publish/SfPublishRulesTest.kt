@@ -2,7 +2,6 @@ package ch.actemium.rider.servicefabric.publish
 
 import ch.actemium.rider.servicefabric.env.EnvCheck
 import ch.actemium.rider.servicefabric.env.EnvironmentSummary
-import ch.actemium.rider.servicefabric.settings.PowerShellInterpreter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -75,7 +74,7 @@ class SfPublishRulesTest {
     @Test
     fun `happy path command with Windows PowerShell and bypass`() {
         val args = SfPublishRules.deployArgs(
-            PowerShellInterpreter.WINDOWS_POWERSHELL, true, dir, PublishOptions(profile), pkg, false,
+            true, dir, PublishOptions(profile), pkg, false,
         )
         assertEquals(
             listOf(
@@ -91,7 +90,7 @@ class SfPublishRulesTest {
     @Test
     fun `upgrade from profile omits install options`() {
         val script = SfPublishRules.deployScript(
-            PowerShellInterpreter.WINDOWS_POWERSHELL, dir,
+            dir,
             PublishOptions(profile, UpgradeChoice.USE_PROFILE, OverwriteBehavior.Always, true), pkg, true,
         )
         assertTrue(script.contains("-OverrideUpgradeBehavior None;"))
@@ -102,7 +101,7 @@ class SfPublishRulesTest {
     @Test
     fun `force upgrade omits install options`() {
         val script = SfPublishRules.deployScript(
-            PowerShellInterpreter.WINDOWS_POWERSHELL, dir,
+            dir,
             PublishOptions(profile, UpgradeChoice.FORCE, OverwriteBehavior.Always, true), pkg, false,
         )
         assertTrue(script.contains("-OverrideUpgradeBehavior ForceUpgrade;"))
@@ -113,7 +112,7 @@ class SfPublishRulesTest {
     @Test
     fun `new install options and additional parameters`() {
         val script = SfPublishRules.deployScript(
-            PowerShellInterpreter.WINDOWS_POWERSHELL, dir,
+            dir,
             PublishOptions(profile, UpgradeChoice.VETO, OverwriteBehavior.Always, true, " -DeployOnly "), pkg, true,
         )
         assertTrue(
@@ -126,22 +125,12 @@ class SfPublishRulesTest {
     @Test
     fun `quotes doubled in paths with spaces`() {
         val script = SfPublishRules.deployScript(
-            PowerShellInterpreter.WINDOWS_POWERSHELL, "C:\\a b\\o'k",
+            "C:\\a b\\o'k",
             PublishOptions("C:\\a b\\o'k\\PublishProfiles\\Local.1Node.xml"), "C:\\a b\\o'k\\pkg\\Debug", false,
         )
         assertTrue(script.contains(". 'C:\\a b\\o''k\\Scripts\\Deploy-FabricApplication.ps1'"))
         assertTrue(script.contains("-PublishProfileFile 'C:\\a b\\o''k\\PublishProfiles\\Local.1Node.xml'"))
         assertTrue(script.contains("-ApplicationPackagePath 'C:\\a b\\o''k\\pkg\\Debug'"))
-    }
-
-    @Test
-    fun `pwsh imports module and bypass off omits execution policy`() {
-        val args = SfPublishRules.deployArgs(PowerShellInterpreter.PWSH, false, dir, PublishOptions(profile), pkg, false)
-        assertEquals("pwsh.exe", args[0])
-        assertFalse(args.contains("-ExecutionPolicy"))
-        assertTrue(args.last().startsWith("\$ErrorActionPreference='Stop'; \$Error.Clear(); Import-Module ServiceFabric -SkipEditionCheck; . '"))
-        val ps = SfPublishRules.deployArgs(PowerShellInterpreter.WINDOWS_POWERSHELL, true, dir, PublishOptions(profile), pkg, false)
-        assertFalse(ps.last().contains("Import-Module"))
     }
 
     @Test
@@ -166,7 +155,7 @@ class SfPublishRulesTest {
     @Test
     fun `Windows PowerShell with bypass off has no execution policy`() {
         val args = SfPublishRules.deployArgs(
-            PowerShellInterpreter.WINDOWS_POWERSHELL, false, dir, PublishOptions(profile), pkg, false,
+            false, dir, PublishOptions(profile), pkg, false,
         )
         assertEquals(listOf("powershell.exe", "-NoProfile", "-NonInteractive", "-Command"), args.dropLast(1))
     }

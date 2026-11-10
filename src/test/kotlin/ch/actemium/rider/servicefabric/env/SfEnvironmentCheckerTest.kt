@@ -1,6 +1,5 @@
 package ch.actemium.rider.servicefabric.env
 
-import ch.actemium.rider.servicefabric.settings.PowerShellInterpreter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -66,19 +65,20 @@ class SfEnvironmentCheckerTest {
     }
 
     @Test
-    fun `module cached per interpreter and probe failures are unknown`() {
+    fun `module cached and probe failures are unknown`() {
         val c = checker()
-        assertEquals(CheckStatus.OK, c.checkModule(PowerShellInterpreter.WINDOWS_POWERSHELL).status)
-        c.checkModule(PowerShellInterpreter.WINDOWS_POWERSHELL)
+        assertEquals(CheckStatus.OK, c.checkModule().status)
+        c.checkModule()
         assertEquals(1, moduleCalls)
+        c.clearCache()
         moduleOutput = { ProbeOutput(0, "", false) }
-        assertEquals(CheckStatus.FAILED, c.checkModule(PowerShellInterpreter.PWSH).status)
+        assertEquals(CheckStatus.FAILED, c.checkModule().status)
         assertEquals(2, moduleCalls)
         c.clearCache()
-        moduleOutput = { throw java.io.IOException("pwsh.exe not found") }
-        assertEquals(CheckStatus.UNKNOWN, c.checkModule(PowerShellInterpreter.PWSH).status)
+        moduleOutput = { throw java.io.IOException("powershell.exe not found") }
+        assertEquals(CheckStatus.UNKNOWN, c.checkModule().status)
         moduleOutput = { ProbeOutput(-1, "", true) }
-        assertEquals(CheckStatus.UNKNOWN, c.checkModule(PowerShellInterpreter.WINDOWS_POWERSHELL).status)
+        assertEquals(CheckStatus.UNKNOWN, c.checkModule().status)
     }
 
     @Test
@@ -134,11 +134,11 @@ class SfEnvironmentCheckerTest {
     @Test
     fun `first use warns once when sdk missing, not repeated even after clearCache`() {
         val c = checker()
-        val warning = c.firstUseWarning(PowerShellInterpreter.WINDOWS_POWERSHELL)
+        val warning = c.firstUseWarning()
         assertEquals(listOf(EnvCheck.SDK), warning?.problems)
-        assertNull(c.firstUseWarning(PowerShellInterpreter.WINDOWS_POWERSHELL))
+        assertNull(c.firstUseWarning())
         c.clearCache()
-        assertNull(c.firstUseWarning(PowerShellInterpreter.WINDOWS_POWERSHELL))
+        assertNull(c.firstUseWarning())
     }
 
     @Test
@@ -146,13 +146,13 @@ class SfEnvironmentCheckerTest {
         val schemas = Files.createDirectories(tmp.resolve("schemas"))
         Files.writeString(schemas.resolve(SfEnvironmentRules.SERVICE_MODEL_XSD), "<xs/>")
         sdkPath = { tmp.toString() }
-        assertNull(checker().firstUseWarning(PowerShellInterpreter.WINDOWS_POWERSHELL))
+        assertNull(checker().firstUseWarning())
     }
 
     @Test
     fun `checkForPublish aggregates every check`() {
         sc = { ProbeOutput(0, "STATE : 1  STOPPED", false) }
-        val report = checker().checkForPublish(tmp, profile("<P><ClusterConnectionParameters /></P>"), PowerShellInterpreter.WINDOWS_POWERSHELL)
+        val report = checker().checkForPublish(tmp, profile("<P><ClusterConnectionParameters /></P>"))
         assertEquals(CheckStatus.FAILED, report[EnvCheck.SDK].status)
         assertEquals(CheckStatus.OK, report[EnvCheck.MODULE].status)
         assertEquals(CheckStatus.FAILED, report[EnvCheck.SCRIPT].status)

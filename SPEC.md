@@ -81,10 +81,10 @@ Le plugin s'appuie sur deux constats clés : la commande Build de Rider ne produ
   - Un profil illisible ou mal formé n'est pas bloquant : avertissement dans la boîte de dialogue, valeurs par défaut appliquées.
 - Pipeline :
   1. F2 (Package) avec la configuration choisie.
-  2. **Seulement si** le Package renvoie 0 : exécution du script de déploiement avec l'interpréteur PowerShell configuré (voir ci-dessous) :
-     `<powershell> -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { $ErrorActionPreference='Stop'; & '.\Scripts\Deploy-FabricApplication.ps1' -PublishProfileFile '<profil>' -ApplicationPackagePath '<pkg absolu>' -OverrideUpgradeBehavior <upgrade> [-OverwriteBehavior …] [-SkipPackageValidation] [<additionnels>]; exit $LASTEXITCODE }"`
-- **Interpréteur PowerShell** : Windows PowerShell 5.1 (`powershell.exe`, 64 bits) par défaut ; PowerShell 7 (`pwsh.exe`) au choix dans les réglages du plugin. Le même interpréteur sert au diagnostic F6.
-- `-ExecutionPolicy Bypass` est désactivable dans les réglages (pour respecter une politique imposée par GPO).
+  2. **Seulement si** le Package renvoie 0 : exécution du script de déploiement avec Windows PowerShell 5.1, au niveau global de la session (`. script`, comme Visual Studio) :
+     `powershell.exe -NoProfile -NonInteractive [-ExecutionPolicy Bypass] -Command "$ErrorActionPreference='Stop'; $Error.Clear(); . '<projet>\Scripts\Deploy-FabricApplication.ps1' -PublishProfileFile '<profil>' -ApplicationPackagePath '<pkg absolu>' -OverrideUpgradeBehavior <upgrade> [-OverwriteBehavior …] [-SkipPackageValidation] [<additionnels>]; if ($Error.Count -gt 0) { exit 1 }; exit 0"`
+- **Interpréteur PowerShell** : toujours Windows PowerShell 5.1 (`powershell.exe`, 64 bits), aussi pour le diagnostic F6. PowerShell 7 n'est pas pris en charge : le module SDK Service Fabric y échoue (`Test-`/`Copy-ServiceFabricApplicationPackage` : type `WindowsImpersonationContext` absent ; vérifié le 2026-11-10).
+- `-ExecutionPolicy Bypass` est **désactivé par défaut** (comportement jugé suspect par l'antivirus Cortex XDR) ; activable dans les réglages si la politique d'exécution bloque le script.
 - Exécution dans le répertoire du projet SF, sans entrée interactive, sortie dans la console Rider.
 - Si le profil vise un cluster sécurisé, les paramètres de connexion sont ceux du profil (`ClusterConnectionParameters`). Aucune saisie de secret dans le plugin en V1.
 - Les options de la boîte de dialogue sont transmises uniquement par paramètres : le plugin n'écrit jamais dans les profils. Si un fichier temporaire est nécessaire, il est créé dans le dossier temp du système.
@@ -118,7 +118,7 @@ Vérifications exécutées au premier usage d'une action SF dans la session de l
 | Vérification | Méthode | En cas d'échec |
 |---|---|---|
 | SDK SF installé | Registre `HKLM\SOFTWARE\Microsoft\Service Fabric SDK\FabricSDKInstallPath` (vues 64 et 32 bits), puis présence de `schemas\ServiceFabricServiceModel.xsd` | Avertissement + lien de téléchargement ; F5 inactif |
-| Module PowerShell SF | `Get-Module -ListAvailable ServiceFabric`, avec l'interpréteur configuré en F3 (timeout 30 s) | Publish bloqué avec message explicite |
+| Module PowerShell SF | `Get-Module -ListAvailable ServiceFabric` avec `powershell.exe` (timeout 30 s) | Publish bloqué avec message explicite |
 | Script de déploiement | Présence de `Scripts\Deploy-FabricApplication.ps1` | Publish bloqué avec message explicite |
 | Cluster local (si profil local) | Service Windows `FabricHostSvc` démarré **et** connexion TCP possible sur le point de terminaison du profil | Publish bloqué avec le message « Cluster local arrêté ou pas encore prêt » |
 
@@ -158,7 +158,7 @@ Toutes les fonctions V1 sont réalisables côté IntelliJ (frontend) : actions, 
 | `SfRunConfigurationType` / `SfRunConfiguration` | `configurationType` | F4 |
 | `SfSchemaProvider` | `xmlSchemaProvider` (ou `standardResourceProvider`) | F5 |
 | `SfEnvironmentChecker` | service application | F6 |
-| `SfSettings` | `applicationConfigurable` | Interpréteur PowerShell, `Bypass`, création auto F4 |
+| `SfSettings` | `applicationConfigurable` | `Bypass`, création auto F4 |
 
 ## 7. Critères d'acceptation (V1)
 
@@ -166,14 +166,14 @@ Sur le dépôt `common.auth` (solution `vesact.common.auth.sln`), sauf mention c
 
 1. **CA1** — Le menu *Service Fabric* apparaît sur `vesact.auth.sf` et **pas** sur les projets C#, y compris avec la solution au format `.slnx`.
 2. **CA2** — *Package* produit `vesact.auth.sf\pkg\Debug\` contenant `ApplicationManifest.xml` et `vesact.auth.svc\{Code, ServiceManifest.xml}` ; la console affiche la sortie MSBuild. Le résultat est identique sur une machine avec et sans Visual Studio installé.
-3. **CA3** — *Publish…* avec `Local.1Node.xml`, cluster local démarré : l'application est déployée (visible dans Service Fabric Explorer) ; code retour 0 ; notification de succès. Vérifié avec PowerShell 5.1 et avec `pwsh`.
+3. **CA3** — *Publish…* avec `Local.1Node.xml`, cluster local démarré : l'application est déployée (visible dans Service Fabric Explorer) ; code retour 0 ; notification de succès.
 4. **CA4** — *Publish…* avec le cluster local arrêté : Publish bloqué avec le message « Cluster local arrêté ou pas encore prêt », sans exception non gérée.
 5. **CA5** — La run configuration créée automatiquement pour `vesact.auth.sf` produit les résultats de CA2 et CA3 via le bouton Run, et n'est pas ajoutée aux fichiers partagés de `.idea`.
 6. **CA6** — Dans `ApplicationManifest.xml`, la complétion propose les éléments du schéma (`ServiceManifestImport`, `DefaultServices`…) et une balise invalide est soulignée.
 7. **CA7** — Sur une machine sans SDK SF : le plugin se charge, F6 affiche un avertissement, aucune erreur dans *IDE Internal Errors*.
 8. **CA8** — Aucun fichier du dépôt n'est modifié par le plugin (hors `pkg\`, `bin\`, `obj\` et les fichiers non partagés de `.idea\`).
 9. **CA9** — Un Package volontairement en échec (erreur de compilation) affiche une notification d'échec et n'enchaîne pas le Deploy.
-10. **CA10** — Stop pendant le Deploy : aucun processus `powershell`/`pwsh` ou MSBuild ne reste actif.
+10. **CA10** — Stop pendant le Deploy : aucun processus `powershell` ou MSBuild ne reste actif.
 11. **CA11** — Les options *Overwrite behavior*, *Skip package validation* et *Upgrade* apparaissent dans la ligne de commande affichée en console.
 12. **CA12** — Sous macOS ou Linux, le plugin se charge et les actions SF sont masquées.
 
@@ -183,8 +183,8 @@ Sur le dépôt `common.auth` (solution `vesact.common.auth.sln`), sauf mention c
 |---|---|---|
 | API frontend Rider du modèle de projet peu documentée ou changeante | Détection F1 | Fallback : scan des `.sfproj` référencés par le `.sln`/`.slnx` ; Plugin Verifier en CI |
 | Variantes de `Deploy-FabricApplication.ps1` (anciennes versions, scripts personnalisés) | F3 | N'utiliser que les paramètres communs ; champ « Paramètres additionnels » libre |
-| Politique d'exécution PowerShell ou droits admin requis pour le cluster local | F3 | `-ExecutionPolicy Bypass` (désactivable) ; message explicite si accès refusé |
-| Module `ServiceFabric` indisponible sous `pwsh` | F3 | 5.1 par défaut ; F6 vérifie le module avec l'interpréteur choisi |
+| Politique d'exécution PowerShell ou droits admin requis pour le cluster local | F3 | `-ExecutionPolicy Bypass` en option (désactivé par défaut) ; message explicite si accès refusé |
+| Module SDK `ServiceFabric` incompatible avec PowerShell 7 | F3 | Toujours Windows PowerShell 5.1 (`powershell.exe`) |
 | Compilation double x64/AnyCPU lors du Package (lenteur) | Confort | Documenter ; investiguer en V2 |
 | Évolution du format `.sfproj` par Microsoft (extension VS2026) | Long terme | Ne dépendre que de la cible `Package` du package NuGet |
 
@@ -192,7 +192,7 @@ Sur le dépôt `common.auth` (solution `vesact.common.auth.sln`), sauf mention c
 
 1. Publication vers des clusters distants sécurisés (certificats) : à tester en V1 sur `cluster-test.example.com` ou à repousser ?
 
-**Décisions prises (review du 2026-11-09) :** identifiant `ch.actemium.rider.servicefabric`, usage interne (pas de Marketplace en V1) ; MSBuild = toujours `dotnet msbuild` ; PowerShell 5.1 par défaut et `pwsh` au choix ; run configurations créées automatiquement mais non partagées.
+**Décisions prises (review du 2026-11-09) :** identifiant `ch.actemium.rider.servicefabric`, usage interne (pas de Marketplace en V1) ; MSBuild = toujours `dotnet msbuild` ; PowerShell = toujours Windows PowerShell 5.1 (choix « 5.1 + pwsh » abandonné le 2026-11-10 : module SDK incompatible avec PowerShell 7) ; run configurations créées automatiquement mais non partagées.
 
 ---
 

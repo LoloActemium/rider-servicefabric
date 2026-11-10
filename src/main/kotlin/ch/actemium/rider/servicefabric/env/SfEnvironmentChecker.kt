@@ -2,8 +2,6 @@ package ch.actemium.rider.servicefabric.env
 
 import ch.actemium.rider.servicefabric.SfBundle
 import ch.actemium.rider.servicefabric.build.SfPackageRunner
-import ch.actemium.rider.servicefabric.settings.PowerShellInterpreter
-import ch.actemium.rider.servicefabric.settings.SfSettings
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.util.ExecUtil
 import com.intellij.ide.BrowserUtil
@@ -23,7 +21,6 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Thin OS probes; may throw — the checker turns any exception into [CheckStatus.UNKNOWN]. */
@@ -93,7 +90,8 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
 
     @Volatile
     private var sdkCache: SdkState? = null
-    private val moduleCache = ConcurrentHashMap<PowerShellInterpreter, CheckResult>()
+    @Volatile
+    private var moduleCache: CheckResult? = null
     private val warned = AtomicBoolean(false)
 
     fun checkSdk(): CheckResult = sdkState().result
@@ -122,10 +120,11 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
         return state
     }
 
-    fun checkModule(interpreter: PowerShellInterpreter): CheckResult = moduleCache.computeIfAbsent(interpreter) {
-        try {
+    fun checkModule(): CheckResult {
+        moduleCache?.let { return it }
+        val result = try {
             val output = probes.runProcess(
-                SfEnvironmentRules.moduleProbeArgs(it), SfEnvironmentRules.MODULE_TIMEOUT_MS,
+                SfEnvironmentRules.moduleProbeArgs(), SfEnvironmentRules.MODULE_TIMEOUT_MS,
             )
             val status = SfEnvironmentRules.parseModuleProbe(output)
             CheckResult(status, if (output.timedOut) "timeout" else null)
@@ -133,6 +132,8 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
             LOG.info("PowerShell module check failed", e)
             CheckResult(CheckStatus.UNKNOWN, e.message)
         }
+        moduleCache = result
+        return result
     }
 
     fun checkScript(projectDir: Path): CheckResult = try {
@@ -169,14 +170,10 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
         }
     }
 
-    fun checkForPublish(
-        projectDir: Path,
-        profileFile: Path?,
-        interpreter: PowerShellInterpreter = SfSettings.getInstance().powerShell,
-    ): EnvironmentReport = EnvironmentReport(
+    fun checkForPublish(projectDir: Path, profileFile: Path?): EnvironmentReport = EnvironmentReport(
         mapOf(
             EnvCheck.SDK to checkSdk(),
-            EnvCheck.MODULE to checkModule(interpreter),
+            EnvCheck.MODULE to checkModule(),
             EnvCheck.SCRIPT to checkScript(projectDir),
             EnvCheck.CLUSTER to checkLocalCluster(profileFile),
         ),
@@ -184,16 +181,15 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
 
     fun clearCache() {
         sdkCache = null
-        moduleCache.clear()
+        moduleCache = null
     }
 
     /** Runs the cached checks once per IDE session and warns if anything is wrong. Safe to call from any thread. */
     fun warnOnceOnFirstUse(project: Project) {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val interpreter = SfSettings.getInstance().powerShell
-                val warning = firstUseWarning(interpreter) ?: return@executeOnPooledThread
-                val lines = warning.problems.map { describe(it, warning.report[it], interpreter) }
+                val warning = firstUseWarning() ?: return@executeOnPooledThread
+                val lines = warning.problems.map { describe(it, warning.report[it]) }
                 notify(project, SfBundle.message("env.firstUse.title"), lines.joinToString("<br>"),
                     NotificationType.WARNING, sdkLink = warning.report[EnvCheck.SDK].status != CheckStatus.OK)
             } catch (e: Throwable) {
@@ -206,10 +202,10 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
      * Once per checker instance (IDE session; [clearCache] does not reset it): runs the cached checks and
      * returns the problems to warn about, or null if already called or everything is OK.
      */
-    internal fun firstUseWarning(interpreter: PowerShellInterpreter): FirstUseWarning? {
+    internal fun firstUseWarning(): FirstUseWarning? {
         if (!warned.compareAndSet(false, true)) return null
         val report = EnvironmentReport(
-            mapOf(EnvCheck.SDK to checkSdk(), EnvCheck.MODULE to checkModule(interpreter)),
+            mapOf(EnvCheck.SDK to checkSdk(), EnvCheck.MODULE to checkModule()),
         )
         val summary = SfEnvironmentRules.summarize(report)
         val problems = summary.blocking + summary.warnings
@@ -235,19 +231,8 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
 
         fun checkName(check: EnvCheck): String = SfBundle.message(checkNameKey(check))
 
-        fun describe(check: EnvCheck, result: CheckResult, interpreter: PowerShellInterpreter? = null): String {
-            val name = if (check == EnvCheck.MODULE && interpreter != null) {
-                "${checkName(check)} (${executableName(interpreter)})"
-            } else {
-                checkName(check)
-            }
-            return "$name: ${SfBundle.message(statusKey(check, result.status))}"
-        }
-
-        internal fun executableName(interpreter: PowerShellInterpreter): String = when (interpreter) {
-            PowerShellInterpreter.WINDOWS_POWERSHELL -> "powershell.exe"
-            PowerShellInterpreter.PWSH -> "pwsh.exe"
-        }
+        fun describe(check: EnvCheck, result: CheckResult): String =
+            "${checkName(check)}: ${SfBundle.message(statusKey(check, result.status))}"
 
         fun notify(project: Project?, title: String, content: String, type: NotificationType, sdkLink: Boolean) {
             val notification = NotificationGroupManager.getInstance()

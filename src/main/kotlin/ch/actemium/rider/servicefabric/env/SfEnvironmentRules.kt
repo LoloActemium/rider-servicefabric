@@ -1,6 +1,5 @@
 package ch.actemium.rider.servicefabric.env
 
-import ch.actemium.rider.servicefabric.settings.PowerShellInterpreter
 import org.w3c.dom.Element
 import java.io.StringReader
 import javax.xml.XMLConstants
@@ -95,16 +94,11 @@ object SfEnvironmentRules {
         return if (nodes.length > 0) nodes.item(0) as Element else null
     }
 
-    fun moduleProbeArgs(interpreter: PowerShellInterpreter): List<String> = when (interpreter) {
-        PowerShellInterpreter.WINDOWS_POWERSHELL -> listOf(
-            "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-            "Get-Module -ListAvailable ServiceFabric",
-        )
-        PowerShellInterpreter.PWSH -> listOf(
-            "pwsh.exe", "-NoProfile", "-NonInteractive", "-Command",
-            "Get-Module -ListAvailable ServiceFabric -SkipEditionCheck",
-        )
-    }
+    /** Windows PowerShell 5.1 only: the SDK module does not work under PowerShell 7. */
+    fun moduleProbeArgs(): List<String> = listOf(
+        "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+        "Get-Module -ListAvailable ServiceFabric",
+    )
 
     fun parseModuleProbe(output: ProbeOutput?): CheckStatus = when {
         output == null || output.timedOut || output.exitCode != 0 -> CheckStatus.UNKNOWN

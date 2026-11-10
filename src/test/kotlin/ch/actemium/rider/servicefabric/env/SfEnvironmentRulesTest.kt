@@ -1,6 +1,5 @@
 package ch.actemium.rider.servicefabric.env
 
-import ch.actemium.rider.servicefabric.settings.PowerShellInterpreter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -67,14 +66,11 @@ class SfEnvironmentRulesTest {
     }
 
     @Test
-    fun `module probe arguments per interpreter`() {
-        val ps = SfEnvironmentRules.moduleProbeArgs(PowerShellInterpreter.WINDOWS_POWERSHELL)
+    fun `module probe uses Windows PowerShell`() {
+        val ps = SfEnvironmentRules.moduleProbeArgs()
         assertEquals("powershell.exe", ps.first())
         assertEquals("Get-Module -ListAvailable ServiceFabric", ps.last())
         assertTrue(ps.containsAll(listOf("-NoProfile", "-NonInteractive", "-Command")))
-        val pwsh = SfEnvironmentRules.moduleProbeArgs(PowerShellInterpreter.PWSH)
-        assertEquals("pwsh.exe", pwsh.first())
-        assertTrue(pwsh.last().contains("-SkipEditionCheck"))
     }
 
     @Test

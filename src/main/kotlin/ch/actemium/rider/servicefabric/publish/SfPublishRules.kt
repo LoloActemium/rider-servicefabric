@@ -2,7 +2,6 @@ package ch.actemium.rider.servicefabric.publish
 
 import ch.actemium.rider.servicefabric.env.EnvironmentSummary
 import ch.actemium.rider.servicefabric.env.SfEnvironmentRules
-import ch.actemium.rider.servicefabric.settings.PowerShellInterpreter
 import java.io.StringReader
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
@@ -83,14 +82,10 @@ object SfPublishRules {
 
     fun quote(value: String): String = "'" + value.replace(SINGLE_QUOTES) { it.value + it.value } + "'"
 
-    fun executable(interpreter: PowerShellInterpreter): String = when (interpreter) {
-        PowerShellInterpreter.WINDOWS_POWERSHELL -> "powershell.exe"
-        PowerShellInterpreter.PWSH -> "pwsh.exe"
-    }
+    const val EXECUTABLE = "powershell.exe"
 
     /** Body of `-Command`. */
     fun deployScript(
-        interpreter: PowerShellInterpreter,
         projectDir: String,
         options: PublishOptions,
         packagePath: String,
@@ -110,21 +105,19 @@ object SfPublishRules {
             }
             options.additionalParameters.trim().takeIf { it.isNotEmpty() }?.let { add(it) }
         }.joinToString(" ")
-        val import = if (interpreter == PowerShellInterpreter.PWSH) " Import-Module ServiceFabric -SkipEditionCheck;" else ""
         // SDK functions report some failures as non-terminating errors; $Error catches them so the exit code is 1.
-        return "\$ErrorActionPreference='Stop'; \$Error.Clear();$import $call; if (\$Error.Count -gt 0) { exit 1 }; exit 0"
+        return "\$ErrorActionPreference='Stop'; \$Error.Clear(); $call; if (\$Error.Count -gt 0) { exit 1 }; exit 0"
     }
 
     /** Full deploy command line, one element per process argument. */
     fun deployArgs(
-        interpreter: PowerShellInterpreter,
         executionPolicyBypass: Boolean,
         projectDir: String,
         options: PublishOptions,
         packagePath: String,
         profileUpgradeEnabled: Boolean,
     ): List<String> = buildList {
-        add(executable(interpreter))
+        add(EXECUTABLE)
         add("-NoProfile")
         add("-NonInteractive")
         if (executionPolicyBypass) {
@@ -132,7 +125,7 @@ object SfPublishRules {
             add("Bypass")
         }
         add("-Command")
-        add(deployScript(interpreter, projectDir, options, packagePath, profileUpgradeEnabled))
+        add(deployScript(projectDir, options, packagePath, profileUpgradeEnabled))
     }
 
     fun afterEnvironment(summary: EnvironmentSummary): PublishStep =

@@ -162,13 +162,11 @@ class SfPublishAction : AnAction(), DumbAware {
         try {
             val projectDir = Path.of(sfproj).toAbsolutePath().parent
             val profileFile = projectDir.resolve(SfPublishRules.PROFILES_DIR).resolve(choice.profile)
-            val settings = SfSettings.getInstance()
-            val interpreter = settings.powerShell
             val checker = SfEnvironmentChecker.getInstance()
-            val report = checker.checkForPublish(projectDir, profileFile, interpreter)
+            val report = checker.checkForPublish(projectDir, profileFile)
             val summary = SfEnvironmentRules.summarize(report)
             if (SfPublishRules.afterEnvironment(summary) == PublishStep.ABORT_ENVIRONMENT) {
-                val lines = summary.blocking.map { SfEnvironmentChecker.describe(it, report[it], interpreter) }
+                val lines = summary.blocking.map { SfEnvironmentChecker.describe(it, report[it]) }
                 SfEnvironmentChecker.notify(
                     project, SfBundle.message("publish.blocked.title", projectName), lines.joinToString("<br>"),
                     NotificationType.ERROR, sdkLink = false,
@@ -176,7 +174,7 @@ class SfPublishAction : AnAction(), DumbAware {
                 return
             }
             if (summary.warnings.any { it != EnvCheck.SDK }) {
-                val lines = summary.warnings.map { SfEnvironmentChecker.describe(it, report[it], interpreter) }
+                val lines = summary.warnings.map { SfEnvironmentChecker.describe(it, report[it]) }
                 SfEnvironmentChecker.notify(
                     project, SfBundle.message("publish.warnings.title"), lines.joinToString("<br>"),
                     NotificationType.WARNING, sdkLink = false,
@@ -223,7 +221,7 @@ class SfPublishAction : AnAction(), DumbAware {
                 additionalParameters = choice.additionalParameters,
             )
             val args = SfPublishRules.deployArgs(
-                settings.powerShell, settings.executionPolicyBypass, projectDir.toString(), options, packagePath,
+                settings.executionPolicyBypass, projectDir.toString(), options, packagePath,
                 choice.profileInfo.upgradeEnabled,
             )
             SfDeployRunner.getInstance(project).runDeploy(projectName, projectDir.toFile(), args) { release() }

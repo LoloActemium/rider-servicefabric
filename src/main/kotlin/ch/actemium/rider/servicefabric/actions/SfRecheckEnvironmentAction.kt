@@ -7,7 +7,6 @@ import ch.actemium.rider.servicefabric.env.CheckStatus
 import ch.actemium.rider.servicefabric.env.EnvCheck
 import ch.actemium.rider.servicefabric.env.SfEnvironmentChecker
 import ch.actemium.rider.servicefabric.env.SfEnvironmentRules
-import ch.actemium.rider.servicefabric.settings.SfSettings
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -40,10 +39,9 @@ class SfRecheckEnvironmentAction : AnAction(), DumbAware {
                     .takeIf { Files.isRegularFile(it) }
                 val checker = SfEnvironmentChecker.getInstance()
                 checker.clearCache()
-                val interpreter = SfSettings.getInstance().powerShell
-                val report = checker.checkForPublish(projectDir, profile, interpreter)
+                val report = checker.checkForPublish(projectDir, profile)
                 val content = EnvCheck.entries.joinToString("<br>") {
-                    SfEnvironmentChecker.describe(it, report[it], interpreter)
+                    SfEnvironmentChecker.describe(it, report[it])
                 }
                 val summary = SfEnvironmentRules.summarize(report)
                 val type = when {

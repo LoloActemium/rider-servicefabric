@@ -8,6 +8,7 @@ import ch.actemium.rider.servicefabric.build.SfPackageRunner
 import ch.actemium.rider.servicefabric.build.SfRunGuard
 import ch.actemium.rider.servicefabric.detection.MenuVisibility
 import ch.actemium.rider.servicefabric.detection.SfProjectDetector
+import ch.actemium.rider.servicefabric.env.SfEnvironmentChecker
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -55,6 +56,7 @@ class SfPackageAction : AnAction(), DumbAware {
         val active = SolutionConfigurationManager.getInstance(project).activeConfigurationAndPlatform
             ?.let { ConfigurationAndPlatform(it.configuration, it.platform) }
         val solutionFile = WorkspaceModel.getInstance(project).getSolutionEntity()?.getFile()?.path
+        SfEnvironmentChecker.getInstance().warnOnceOnFirstUse(project)
         ApplicationManager.getApplication().executeOnPooledThread {
             val resolved = try {
                 resolveConfiguration(active, solutionFile, sfproj)

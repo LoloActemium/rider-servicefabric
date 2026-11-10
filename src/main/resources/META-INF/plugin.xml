@@ -32,6 +32,9 @@
                     class="ch.actemium.rider.servicefabric.actions.SfPackageAction"/>
             <action id="ServiceFabric.Publish"
                     class="ch.actemium.rider.servicefabric.actions.SfPublishPlaceholderAction"/>
+            <separator/>
+            <action id="ServiceFabric.RecheckEnvironment"
+                    class="ch.actemium.rider.servicefabric.actions.SfRecheckEnvironmentAction"/>
         </group>
     </actions>
 </idea-plugin>

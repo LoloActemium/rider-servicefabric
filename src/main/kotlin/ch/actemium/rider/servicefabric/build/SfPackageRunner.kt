@@ -136,14 +136,25 @@ class SfPackageRunner(private val project: Project) {
         val console = TextConsoleBuilderFactory.getInstance().createBuilder(project)
             .filters(MsBuildOutputFilter(project))
             .console
+        val cancelled = AtomicBoolean(false)
         val handler = try {
-            KillableColoredProcessHandler(commandLine).apply { setShouldKillProcessSoftly(false) }
+            object : KillableColoredProcessHandler(commandLine) {
+                override fun destroyProcessImpl() {
+                    cancelled.set(true)
+                    super.destroyProcessImpl()
+                }
+
+                override fun killProcess() {
+                    cancelled.set(true)
+                    super.killProcess()
+                }
+            }.apply { setShouldKillProcessSoftly(false) }
         } catch (e: Exception) {
             failToStart(e, console, null, onDone)
             return
         }
         try {
-            wire(handler, console, commandLine, dotnet, projectFile, configuration, platform, warning, notify, onDone)
+            wire(handler, console, cancelled, dotnet, projectFile, configuration, platform, warning, notify, onDone)
         } catch (e: Exception) {
             failToStart(e, console, handler, onDone)
         }
@@ -152,7 +163,7 @@ class SfPackageRunner(private val project: Project) {
     private fun wire(
         handler: KillableColoredProcessHandler,
         console: ConsoleView,
-        commandLine: GeneralCommandLine,
+        cancelled: AtomicBoolean,
         dotnet: File,
         projectFile: Path,
         configuration: String,
@@ -162,12 +173,7 @@ class SfPackageRunner(private val project: Project) {
         onDone: (PackageResult) -> Unit,
     ) {
         val projectName = projectFile.fileName.toString().substringBeforeLast('.')
-        val cancelled = AtomicBoolean(false)
         handler.addProcessListener(object : ProcessListener {
-            override fun processWillTerminate(event: ProcessEvent, willBeDestroyed: Boolean) {
-                if (willBeDestroyed) cancelled.set(true)
-            }
-
             override fun processTerminated(event: ProcessEvent) {
                 ApplicationManager.getApplication().executeOnPooledThread {
                     var result: PackageResult = PackageResult.Failed(event.exitCode, console)

@@ -90,7 +90,7 @@ object SfEnvironmentRules {
             isExpandEntityReferences = false
         }
         val doc = factory.newDocumentBuilder().apply { setErrorHandler(null) }
-            .parse(InputSource(StringReader(xml)))
+            .parse(InputSource(StringReader(xml.removePrefix("\uFEFF"))))
         val nodes = doc.getElementsByTagNameNS("*", "ClusterConnectionParameters")
         return if (nodes.length > 0) nodes.item(0) as Element else null
     }

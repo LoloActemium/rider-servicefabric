@@ -56,7 +56,7 @@ object SfPublishRules {
                 isExpandEntityReferences = false
             }
             val doc = factory.newDocumentBuilder().apply { setErrorHandler(null) }
-                .parse(InputSource(StringReader(xml)))
+                .parse(InputSource(StringReader(xml.removePrefix("\uFEFF"))))
             val nodes = doc.getElementsByTagNameNS("*", "UpgradeDeployment")
             val enabled = nodes.length > 0 &&
                 (nodes.item(0) as Element).getAttribute("Enabled").trim().equals("true", ignoreCase = true)

@@ -65,7 +65,7 @@ object SfConfigurationResolver {
         val doc = try {
             val factory = DocumentBuilderFactory.newInstance()
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            factory.newDocumentBuilder().parse(InputSource(StringReader(slnxText)))
+            factory.newDocumentBuilder().parse(InputSource(StringReader(slnxText.removePrefix("\uFEFF"))))
         } catch (_: Exception) {
             return null
         }

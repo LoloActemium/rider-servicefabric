@@ -98,7 +98,9 @@ object SfPublishRules {
     ): String {
         val script = projectDir.trimEnd('\\', '/') + "\\" + DEPLOY_SCRIPT
         val call = buildList {
-            add("& ${quote(script)}")
+            // Dot-sourced at global scope, as Visual Studio does: Connect-ServiceFabricCluster stores the
+            // connection in the session, where the SDK module functions look it up.
+            add(". ${quote(script)}")
             add("-PublishProfileFile ${quote(options.profileFile)}")
             add("-ApplicationPackagePath ${quote(packagePath)}")
             add("-OverrideUpgradeBehavior ${options.upgrade.argument}")
@@ -109,7 +111,8 @@ object SfPublishRules {
             options.additionalParameters.trim().takeIf { it.isNotEmpty() }?.let { add(it) }
         }.joinToString(" ")
         val import = if (interpreter == PowerShellInterpreter.PWSH) " Import-Module ServiceFabric -SkipEditionCheck;" else ""
-        return "& { \$ErrorActionPreference='Stop';$import $call; exit \$LASTEXITCODE }"
+        // SDK functions report some failures as non-terminating errors; $Error catches them so the exit code is 1.
+        return "\$ErrorActionPreference='Stop'; \$Error.Clear();$import $call; if (\$Error.Count -gt 0) { exit 1 }; exit 0"
     }
 
     /** Full deploy command line, one element per process argument. */

@@ -80,9 +80,9 @@ class SfPublishRulesTest {
         assertEquals(
             listOf(
                 "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
-                "& { \$ErrorActionPreference='Stop'; & 'C:\\repo\\app.sf\\Scripts\\Deploy-FabricApplication.ps1' " +
+                "\$ErrorActionPreference='Stop'; \$Error.Clear(); . 'C:\\repo\\app.sf\\Scripts\\Deploy-FabricApplication.ps1' " +
                     "-PublishProfileFile '$profile' -ApplicationPackagePath '$pkg' -OverrideUpgradeBehavior None " +
-                    "-OverwriteBehavior Never; exit \$LASTEXITCODE }",
+                    "-OverwriteBehavior Never; if (\$Error.Count -gt 0) { exit 1 }; exit 0",
             ),
             args,
         )
@@ -118,7 +118,7 @@ class SfPublishRulesTest {
         )
         assertTrue(
             script.contains(
-                "-OverrideUpgradeBehavior VetoUpgrade -OverwriteBehavior Always -SkipPackageValidation -DeployOnly; exit",
+                "-OverrideUpgradeBehavior VetoUpgrade -OverwriteBehavior Always -SkipPackageValidation -DeployOnly; if",
             ),
         )
     }
@@ -129,7 +129,7 @@ class SfPublishRulesTest {
             PowerShellInterpreter.WINDOWS_POWERSHELL, "C:\\a b\\o'k",
             PublishOptions("C:\\a b\\o'k\\PublishProfiles\\Local.1Node.xml"), "C:\\a b\\o'k\\pkg\\Debug", false,
         )
-        assertTrue(script.contains("& 'C:\\a b\\o''k\\Scripts\\Deploy-FabricApplication.ps1'"))
+        assertTrue(script.contains(". 'C:\\a b\\o''k\\Scripts\\Deploy-FabricApplication.ps1'"))
         assertTrue(script.contains("-PublishProfileFile 'C:\\a b\\o''k\\PublishProfiles\\Local.1Node.xml'"))
         assertTrue(script.contains("-ApplicationPackagePath 'C:\\a b\\o''k\\pkg\\Debug'"))
     }
@@ -139,7 +139,7 @@ class SfPublishRulesTest {
         val args = SfPublishRules.deployArgs(PowerShellInterpreter.PWSH, false, dir, PublishOptions(profile), pkg, false)
         assertEquals("pwsh.exe", args[0])
         assertFalse(args.contains("-ExecutionPolicy"))
-        assertTrue(args.last().startsWith("& { \$ErrorActionPreference='Stop'; Import-Module ServiceFabric -SkipEditionCheck; & '"))
+        assertTrue(args.last().startsWith("\$ErrorActionPreference='Stop'; \$Error.Clear(); Import-Module ServiceFabric -SkipEditionCheck; . '"))
         val ps = SfPublishRules.deployArgs(PowerShellInterpreter.WINDOWS_POWERSHELL, true, dir, PublishOptions(profile), pkg, false)
         assertFalse(ps.last().contains("Import-Module"))
     }

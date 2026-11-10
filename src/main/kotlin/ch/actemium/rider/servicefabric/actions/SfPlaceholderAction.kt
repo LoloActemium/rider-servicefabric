@@ -7,7 +7,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.DumbAware
 
-/** Disabled "Package" / "Publish…" entries until the real actions land (stories 2 and 4). */
+/** Disabled "Publish…" entry until the real action lands (story 4). */
 open class SfPlaceholderAction : AnAction(), DumbAware {
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
@@ -25,7 +25,5 @@ open class SfPlaceholderAction : AnAction(), DumbAware {
 
     override fun actionPerformed(e: AnActionEvent) = Unit
 }
-
-class SfPackagePlaceholderAction : SfPlaceholderAction()
 
 class SfPublishPlaceholderAction : SfPlaceholderAction()

@@ -19,6 +19,8 @@
                 instance="ch.actemium.rider.servicefabric.settings.SfConfigurable"
                 bundle="messages.SfBundle"
                 key="settings.displayName"/>
+        <notificationGroup id="Service Fabric" displayType="BALLOON" bundle="messages.SfBundle"
+                           key="notification.group.name"/>
     </extensions>
 
     <actions>
@@ -27,7 +29,7 @@
                popup="true">
             <add-to-group group-id="SolutionExplorerPopupMenu" anchor="last"/>
             <action id="ServiceFabric.Package"
-                    class="ch.actemium.rider.servicefabric.actions.SfPackagePlaceholderAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfPackageAction"/>
             <action id="ServiceFabric.Publish"
                     class="ch.actemium.rider.servicefabric.actions.SfPublishPlaceholderAction"/>
         </group>

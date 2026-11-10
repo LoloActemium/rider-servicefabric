@@ -1,5 +1,6 @@
 package ch.actemium.rider.servicefabric.actions
 
+import ch.actemium.rider.servicefabric.SfIcons
 import ch.actemium.rider.servicefabric.detection.MenuVisibility
 import ch.actemium.rider.servicefabric.detection.SfProjectDetector
 import ch.actemium.rider.servicefabric.detection.SfProjectRules
@@ -15,6 +16,7 @@ class SfProjectActionGroup : DefaultActionGroup() {
 
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible = computeVisibility(e) != MenuVisibility.HIDDEN
+        e.presentation.icon = SfIcons.ServiceFabric
     }
 
     companion object {

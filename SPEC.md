@@ -49,7 +49,7 @@ Le plugin s'appuie sur deux constats clés : la commande Build de Rider ne produ
 
 - En V1, un projet est « SF » si son fichier a l'extension `.sfproj` (solutions `.sln` et `.slnx`).
 - Les actions F2/F3 ne sont visibles **que** sur ces projets.
-- Les projets SF chargés affichent une icône Service Fabric dans l'explorateur de solution (icône maison, pas le logo Microsoft).
+- Les projets SF chargés affichent une icône Service Fabric dans l'explorateur de solution (icône du Local Cluster Manager lue à l'exécution depuis le SDK installé, rien n'est redistribué ; icône maison en secours).
 - Si le projet est déchargé, les actions sont visibles mais désactivées, avec une infobulle « Projet déchargé ».
 
 ### F2 — Package

@@ -67,7 +67,7 @@ class SfEnvironmentProbes(
             return false
         }
 
-        private fun readSdkInstallPath(): String? {
+        internal fun readSdkInstallPath(): String? {
             for (view in intArrayOf(WinNT.KEY_WOW64_64KEY, WinNT.KEY_WOW64_32KEY)) {
                 val root = WinReg.HKEY_LOCAL_MACHINE
                 val key = SfEnvironmentRules.SDK_REGISTRY_KEY

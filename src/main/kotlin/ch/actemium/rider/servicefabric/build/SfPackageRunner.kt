@@ -180,6 +180,7 @@ class SfPackageRunner(private val project: Project) {
                                 console,
                             )
                         }
+                        printResult(result, console)
                         if (notify) notifyResult(result, projectName)
                     } catch (e: Exception) {
                         LOG.warn(e)
@@ -192,7 +193,6 @@ class SfPackageRunner(private val project: Project) {
         ProcessTerminatedListener.attach(handler)
         console.attachToProcess(handler)
         if (warning != null) console.print("Warning: $warning\n", ConsoleViewContentType.LOG_WARNING_OUTPUT)
-        console.print(commandLine.commandLineString + "\n\n", ConsoleViewContentType.SYSTEM_OUTPUT)
 
         val title = SfBundle.message("package.console.title", projectName)
         val descriptor = RunContentDescriptor(
@@ -223,6 +223,15 @@ class SfPackageRunner(private val project: Project) {
             LOG.info("Invalid PackageLocation '$location'", e)
             SfPackageCommand.packagePath(projectDir, null, configuration)
         }
+    }
+
+    /** Result line in the console, so the package folder link stays reachable after the balloon fades. */
+    private fun printResult(result: PackageResult, console: ConsoleView) {
+        if (result !is PackageResult.Success) return
+        val folder = result.packagePath
+        console.print("\n" + SfBundle.message("package.console.result", folder.toString()) + " ", ConsoleViewContentType.SYSTEM_OUTPUT)
+        console.printHyperlink(SfBundle.message("package.openFolder")) { RevealFileAction.openDirectory(folder) }
+        console.print("\n", ConsoleViewContentType.SYSTEM_OUTPUT)
     }
 
     private fun notifyResult(result: PackageResult, projectName: String) {

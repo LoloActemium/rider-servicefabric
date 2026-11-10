@@ -28,3 +28,21 @@ Rider plugin (frontend-only, Kotlin) to package and publish Service Fabric appli
 Rider > Settings > Plugins > ⚙ > *Install Plugin from Disk…* and pick the zip from `build\distributions`.
 
 Settings live under *Tools > Service Fabric*.
+
+## Updates through a custom plugin repository
+
+Rider proposes updates only for plugins installed from a repository (not from disk).
+
+```powershell
+.\gradlew.bat bumpVersion                                             # 0.1.1 -> 0.1.2 in gradle.properties
+.\gradlew.bat publishToRepository -PpluginRepositoryDir=\\server\share\rider-plugins
+# or, when the folder is served over HTTP:
+.\gradlew.bat publishToRepository -PpluginRepositoryDir=<folder> -PpluginRepositoryUrl=https://intranet/rider-plugins
+```
+
+`buildPlugin` always writes `build\distributions\updatePlugins.xml`; `publishToRepository` copies it with the zip.
+The zip URL is `<pluginRepositoryUrl>/<zip>` when set, else a `file:///` URL to `pluginRepositoryDir`.
+
+Each developer adds the repository once: *Settings > Plugins > ⚙ > Manage Plugin Repositories…* →
+`file:///<folder>/updatePlugins.xml` (or the HTTP URL), then installs *Azure Service Fabric* from the
+Marketplace tab. Rider then offers new versions automatically.

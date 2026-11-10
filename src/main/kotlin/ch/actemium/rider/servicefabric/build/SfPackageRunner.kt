@@ -5,7 +5,6 @@ import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.filters.TextConsoleBuilderFactory
-import com.intellij.execution.process.KillableColoredProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessTerminatedListener
@@ -108,7 +107,7 @@ class SfPackageRunner(private val project: Project) {
     private fun failToStart(
         e: Exception,
         console: ConsoleView?,
-        handler: KillableColoredProcessHandler?,
+        handler: CancellableProcessHandler?,
         onDone: (PackageResult) -> Unit,
     ) {
         try {
@@ -136,34 +135,22 @@ class SfPackageRunner(private val project: Project) {
         val console = TextConsoleBuilderFactory.getInstance().createBuilder(project)
             .filters(MsBuildOutputFilter(project))
             .console
-        val cancelled = AtomicBoolean(false)
         val handler = try {
-            object : KillableColoredProcessHandler(commandLine) {
-                override fun destroyProcessImpl() {
-                    cancelled.set(true)
-                    super.destroyProcessImpl()
-                }
-
-                override fun killProcess() {
-                    cancelled.set(true)
-                    super.killProcess()
-                }
-            }.apply { setShouldKillProcessSoftly(false) }
+            CancellableProcessHandler(commandLine)
         } catch (e: Exception) {
             failToStart(e, console, null, onDone)
             return
         }
         try {
-            wire(handler, console, cancelled, dotnet, projectFile, configuration, platform, warning, notify, onDone)
+            wire(handler, console, dotnet, projectFile, configuration, platform, warning, notify, onDone)
         } catch (e: Exception) {
             failToStart(e, console, handler, onDone)
         }
     }
 
     private fun wire(
-        handler: KillableColoredProcessHandler,
+        handler: CancellableProcessHandler,
         console: ConsoleView,
-        cancelled: AtomicBoolean,
         dotnet: File,
         projectFile: Path,
         configuration: String,
@@ -178,7 +165,7 @@ class SfPackageRunner(private val project: Project) {
                 ApplicationManager.getApplication().executeOnPooledThread {
                     var result: PackageResult = PackageResult.Failed(event.exitCode, console)
                     try {
-                        result = when (SfPackageCommand.classify(cancelled.get(), event.exitCode)) {
+                        result = when (SfPackageCommand.classify(handler.isCancelled, event.exitCode)) {
                             PackageOutcome.CANCELLED -> PackageResult.Cancelled(console)
                             PackageOutcome.FAILED -> PackageResult.Failed(event.exitCode, console)
                             PackageOutcome.SUCCESS -> PackageResult.Success(

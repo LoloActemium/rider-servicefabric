@@ -31,7 +31,7 @@
             <action id="ServiceFabric.Package"
                     class="ch.actemium.rider.servicefabric.actions.SfPackageAction"/>
             <action id="ServiceFabric.Publish"
-                    class="ch.actemium.rider.servicefabric.actions.SfPublishPlaceholderAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfPublishAction"/>
             <separator/>
             <action id="ServiceFabric.RecheckEnvironment"
                     class="ch.actemium.rider.servicefabric.actions.SfRecheckEnvironmentAction"/>

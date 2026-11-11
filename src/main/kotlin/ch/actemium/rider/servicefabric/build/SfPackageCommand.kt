@@ -13,6 +13,9 @@ object SfPackageCommand {
     fun packageArgs(sfproj: String, configuration: String, platform: String): List<String> =
         listOf("msbuild", sfproj, "/t:Package") + commonProperties(configuration, platform)
 
+    fun cleanArgs(sfproj: String, configuration: String, platform: String): List<String> =
+        listOf("msbuild", sfproj, "/t:Clean") + commonProperties(configuration, platform)
+
     fun packageLocationArgs(sfproj: String, configuration: String, platform: String): List<String> =
         listOf("msbuild", sfproj, "-getProperty:$PACKAGE_LOCATION") + commonProperties(configuration, platform)
 

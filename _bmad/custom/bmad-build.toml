@@ -1,0 +1,5 @@
+[workflow]
+
+on_complete = """
+Append this story's manual checks to the project's manual test checklist using the assisted-manual-test standard format (new section named after the story, dependencies filled, agent checks where possible), then ask the user whether to run the assisted manual tests for this section now (skill assisted-manual-test) or later.
+"""

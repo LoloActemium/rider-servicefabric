@@ -42,6 +42,8 @@ class SfPublishDialog(project: Project, private val model: PublishDialogModel) :
     private val overwriteBox = ComboBox(OverwriteBehavior.entries.toTypedArray())
     private val skipValidation = JBCheckBox(SfBundle.message("publish.dialog.skipValidation"))
     private val additional = JBTextField()
+    private var overwriteEdited = false
+    private var updatingOverwrite = false
     private val profileWarning = JBLabel().apply {
         foreground = UIUtil.getErrorForeground()
         border = JBUI.Borders.emptyTop(4)
@@ -60,8 +62,19 @@ class SfPublishDialog(project: Project, private val model: PublishDialogModel) :
             }
         }
         upgradeBox.selectedItem = UpgradeChoice.USE_PROFILE
-        overwriteBox.selectedItem = OverwriteBehavior.Never
-        profileBox.addActionListener { refresh() }
+        overwriteBox.selectedItem = SfPublishRules.defaultOverwrite(selectedInfo())
+        overwriteBox.addActionListener { if (!updatingOverwrite) overwriteEdited = true }
+        profileBox.addActionListener {
+            if (!overwriteEdited) {
+                updatingOverwrite = true
+                try {
+                    overwriteBox.selectedItem = SfPublishRules.defaultOverwrite(selectedInfo())
+                } finally {
+                    updatingOverwrite = false
+                }
+            }
+            refresh()
+        }
         upgradeBox.addActionListener { refresh() }
         isOKActionEnabled = model.profiles.isNotEmpty()
         init()

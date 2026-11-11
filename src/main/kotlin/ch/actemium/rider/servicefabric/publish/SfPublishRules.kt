@@ -73,6 +73,10 @@ object SfPublishRules {
             .distinctBy { it.lowercase() }
             .toList()
 
+    /** Local clusters: `Always` (a second publish would fail on the existing application); remote: `Never`. */
+    fun defaultOverwrite(info: ProfileInfo?): OverwriteBehavior =
+        if (info?.local == true) OverwriteBehavior.Always else OverwriteBehavior.Never
+
     /** Overwrite behavior / skip validation apply only to a new install, i.e. when no upgrade will happen. */
     fun installOptionsEnabled(upgrade: UpgradeChoice, profileUpgradeEnabled: Boolean): Boolean = when (upgrade) {
         UpgradeChoice.FORCE -> false

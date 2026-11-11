@@ -2,24 +2,16 @@ package ch.actemium.rider.servicefabric.actions
 
 import ch.actemium.rider.servicefabric.SfBundle
 import ch.actemium.rider.servicefabric.build.ConfigurationAndPlatform
-import ch.actemium.rider.servicefabric.build.PackageResult
-import ch.actemium.rider.servicefabric.build.ResolvedConfiguration
 import ch.actemium.rider.servicefabric.build.SfConfigurationResolver
 import ch.actemium.rider.servicefabric.build.SfPackageRunner
 import ch.actemium.rider.servicefabric.build.SfRunGuard
 import ch.actemium.rider.servicefabric.detection.MenuVisibility
 import ch.actemium.rider.servicefabric.detection.SfProjectDetector
-import ch.actemium.rider.servicefabric.env.EnvCheck
 import ch.actemium.rider.servicefabric.env.SfEnvironmentChecker
-import ch.actemium.rider.servicefabric.env.SfEnvironmentRules
-import ch.actemium.rider.servicefabric.publish.PublishChoice
 import ch.actemium.rider.servicefabric.publish.PublishDialogModel
-import ch.actemium.rider.servicefabric.publish.PublishOptions
-import ch.actemium.rider.servicefabric.publish.PublishStep
-import ch.actemium.rider.servicefabric.publish.SfDeployRunner
 import ch.actemium.rider.servicefabric.publish.SfPublishDialog
+import ch.actemium.rider.servicefabric.publish.SfPublishPipeline
 import ch.actemium.rider.servicefabric.publish.SfPublishRules
-import ch.actemium.rider.servicefabric.settings.SfSettings
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -27,7 +19,6 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.platform.backend.workspace.WorkspaceModel
@@ -81,29 +72,7 @@ class SfPublishAction : AnAction(), DumbAware {
                 val dialog = SfPublishDialog(project, prepared.model)
                 if (!dialog.showAndGet()) return@invokeLater
                 val choice = dialog.choice() ?: return@invokeLater
-                val guard = SfRunGuard.getInstance(project)
-                if (!guard.tryAcquire(sfproj)) {
-                    notifyError(project, SfBundle.message("publish.alreadyRunning", prepared.model.projectName))
-                    return@invokeLater
-                }
-                FileDocumentManager.getInstance().saveAllDocuments()
-                ApplicationManager.getApplication().executeOnPooledThread {
-                    val resolved = try {
-                        SfPackageAction.resolveConfiguration(
-                            ConfigurationAndPlatform(
-                                choice.configuration,
-                                active?.platform ?: SfConfigurationResolver.DEFAULT_PLATFORM,
-                            ),
-                            solutionFile, sfproj,
-                        )
-                    } catch (ex: Exception) {
-                        LOG.warn("Cannot resolve project configuration", ex)
-                        SfConfigurationResolver.resolve(
-                            ConfigurationAndPlatform(choice.configuration, prepared.platform), null, emptySet(),
-                        )
-                    }
-                    runPipeline(project, sfproj, prepared.model.projectName, resolved, choice) { guard.release(sfproj) }
-                }
+                SfPublishPipeline.getInstance(project).start(sfproj, choice, onDeployed = null)
             }, project.disposed)
         }
     }
@@ -147,91 +116,6 @@ class SfPublishAction : AnAction(), DumbAware {
             defaultConfiguration = resolved.configuration,
         )
         return Prepared(model, resolved.platform, resolved.warning)
-    }
-
-    /** Runs on a pooled thread; [release] is called exactly once when the pipeline ends. */
-    private fun runPipeline(
-        project: Project,
-        sfproj: String,
-        projectName: String,
-        resolved: ResolvedConfiguration,
-        choice: PublishChoice,
-        release: () -> Unit,
-    ) {
-        var handedOff = false
-        try {
-            val projectDir = Path.of(sfproj).toAbsolutePath().parent
-            val profileFile = projectDir.resolve(SfPublishRules.PROFILES_DIR).resolve(choice.profile)
-            val checker = SfEnvironmentChecker.getInstance()
-            val report = checker.checkForPublish(projectDir, profileFile)
-            val summary = SfEnvironmentRules.summarize(report)
-            if (SfPublishRules.afterEnvironment(summary) == PublishStep.ABORT_ENVIRONMENT) {
-                val lines = summary.blocking.map { SfEnvironmentChecker.describe(it, report[it]) }
-                SfEnvironmentChecker.notify(
-                    project, SfBundle.message("publish.blocked.title", projectName), lines.joinToString("<br>"),
-                    NotificationType.ERROR, sdkLink = false,
-                )
-                return
-            }
-            if (summary.warnings.any { it != EnvCheck.SDK }) {
-                val lines = summary.warnings.map { SfEnvironmentChecker.describe(it, report[it]) }
-                SfEnvironmentChecker.notify(
-                    project, SfBundle.message("publish.warnings.title"), lines.joinToString("<br>"),
-                    NotificationType.WARNING, sdkLink = false,
-                )
-            }
-            SfPackageRunner.getInstance(project).runPackage(
-                sfproj, resolved.configuration, resolved.platform, resolved.warning, notify = false,
-            ) { result -> onPackaged(project, projectDir, projectName, choice, result, release) }
-            handedOff = true
-        } catch (ex: Exception) {
-            LOG.warn("Publish failed", ex)
-            notifyError(project, SfBundle.message("publish.error.start", ex.message ?: ex.toString()))
-        } finally {
-            if (!handedOff) release()
-        }
-    }
-
-    private fun onPackaged(
-        project: Project,
-        projectDir: Path,
-        projectName: String,
-        choice: PublishChoice,
-        result: PackageResult,
-        release: () -> Unit,
-    ) {
-        var handedOff = false
-        try {
-            if (SfPublishRules.afterPackage(result is PackageResult.Success) == PublishStep.ABORT_PACKAGE) {
-                when (result) {
-                    is PackageResult.Failed ->
-                        notifyError(project, SfBundle.message("publish.packageFailed", projectName, result.exitCode))
-                    is PackageResult.Cancelled -> notifyError(project, SfBundle.message("publish.cancelled"))
-                    else -> Unit // NotStarted: the package runner already notified
-                }
-                return
-            }
-            val packagePath = (result as PackageResult.Success).packagePath.toAbsolutePath().toString()
-            val settings = SfSettings.getInstance()
-            val options = PublishOptions(
-                profileFile = projectDir.resolve(SfPublishRules.PROFILES_DIR).resolve(choice.profile).toString(),
-                upgrade = choice.upgrade,
-                overwrite = choice.overwrite,
-                skipPackageValidation = choice.skipPackageValidation,
-                additionalParameters = choice.additionalParameters,
-            )
-            val args = SfPublishRules.deployArgs(
-                settings.executionPolicyBypass, projectDir.toString(), options, packagePath,
-                choice.profileInfo.upgradeEnabled,
-            )
-            SfDeployRunner.getInstance(project).runDeploy(projectName, projectDir.toFile(), args) { release() }
-            handedOff = true
-        } catch (ex: Exception) {
-            LOG.warn("Deploy failed to start", ex)
-            notifyError(project, SfBundle.message("publish.error.start", ex.message ?: ex.toString()))
-        } finally {
-            if (!handedOff) release()
-        }
     }
 
     private fun notifyError(project: Project, message: String) {

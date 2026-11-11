@@ -23,6 +23,10 @@
                            key="notification.group.name"/>
         <solutionExplorerCustomization
                 implementation="ch.actemium.rider.servicefabric.detection.SfSolutionExplorerCustomization"/>
+        <configurationType implementation="ch.actemium.rider.servicefabric.run.SfRunConfigurationType"/>
+        <programRunner implementation="ch.actemium.rider.servicefabric.run.SfRunProgramRunner"/>
+        <postStartupActivity
+                implementation="ch.actemium.rider.servicefabric.run.SfRunConfigurationAutoCreator$Startup"/>
     </extensions>
 
     <actions>

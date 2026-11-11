@@ -40,6 +40,8 @@
                     class="ch.actemium.rider.servicefabric.actions.SfPackageAction"/>
             <action id="ServiceFabric.Publish"
                     class="ch.actemium.rider.servicefabric.actions.SfPublishAction"/>
+            <action id="ServiceFabric.EditVersions"
+                    class="ch.actemium.rider.servicefabric.actions.SfEditVersionsAction"/>
             <separator/>
             <action id="ServiceFabric.RecheckEnvironment"
                     class="ch.actemium.rider.servicefabric.actions.SfRecheckEnvironmentAction"/>

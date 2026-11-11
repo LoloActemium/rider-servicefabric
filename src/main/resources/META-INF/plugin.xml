@@ -27,6 +27,7 @@
         <programRunner implementation="ch.actemium.rider.servicefabric.run.SfRunProgramRunner"/>
         <postStartupActivity
                 implementation="ch.actemium.rider.servicefabric.run.SfRunConfigurationAutoCreator$Startup"/>
+        <xml.schemaProvider implementation="ch.actemium.rider.servicefabric.schema.SfSchemaProvider"/>
     </extensions>
 
     <actions>

@@ -10,6 +10,7 @@ import com.jetbrains.rider.projectView.workspace.findProjects
 import com.jetbrains.rider.projectView.workspace.getFile
 import com.jetbrains.rider.projectView.workspace.getProjectModelEntities
 import com.jetbrains.rider.projectView.workspace.isUnloadedProject
+import java.nio.file.Path
 
 @Service(Service.Level.PROJECT)
 class SfProjectDetector(private val project: Project) {
@@ -17,6 +18,18 @@ class SfProjectDetector(private val project: Project) {
     /** All SF projects of the open solution (F1). */
     fun sfProjects(): List<ProjectModelEntity> =
         WorkspaceModel.getInstance(project).findProjects().filter { isSf(it) }
+
+    @Volatile
+    private var dirsCache: Pair<Any, List<String>>? = null
+
+    /** Directories of the SF projects, cached until the workspace model changes. Requires a read action. */
+    fun sfProjectDirs(): List<String> {
+        val snapshot = WorkspaceModel.getInstance(project).currentSnapshot
+        dirsCache?.let { (key, dirs) -> if (key === snapshot) return dirs }
+        val dirs = sfProjects().mapNotNull { e -> filePathOf(e)?.let { Path.of(it).parent?.toString() } }
+        dirsCache = snapshot to dirs
+        return dirs
+    }
 
     /** Selected nodes of the Solution Explorer, adapted for [SfProjectRules.menuVisibility]. */
     fun selection(dataContext: DataContext): List<SelectedNode> =

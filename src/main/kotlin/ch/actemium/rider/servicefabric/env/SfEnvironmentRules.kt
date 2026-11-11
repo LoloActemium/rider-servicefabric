@@ -36,6 +36,8 @@ object SfEnvironmentRules {
     const val SDK_REGISTRY_KEY = "SOFTWARE\\Microsoft\\Service Fabric SDK"
     const val SDK_INSTALL_PATH_VALUE = "FabricSDKInstallPath"
     const val SERVICE_MODEL_XSD = "ServiceFabricServiceModel.xsd"
+    const val STARTUP_SERVICES_XSD = "StartupServicesModel.xsd"
+    const val FABRIC_NAMESPACE = "http://schemas.microsoft.com/2011/01/fabric"
     const val DEPLOY_SCRIPT = "Scripts/Deploy-FabricApplication.ps1"
     const val LOCAL_PROFILE = "Local.1Node.xml"
 

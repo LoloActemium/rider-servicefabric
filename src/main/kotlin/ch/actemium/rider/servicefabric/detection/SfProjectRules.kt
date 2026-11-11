@@ -17,6 +17,18 @@ object SfProjectRules {
     fun isSfProjectFile(path: String?): Boolean =
         path != null && path.endsWith(SF_EXTENSION, ignoreCase = true)
 
+    /** True if [filePath] is under one of [sfProjectDirs] or has a `PackageRoot` ancestor folder (F5 scope). */
+    fun isInSfScope(filePath: String?, sfProjectDirs: Collection<String>): Boolean {
+        if (filePath.isNullOrBlank()) return false
+        val file = normalize(filePath)
+        if (sfProjectDirs.any { dir -> normalize(dir).trimEnd('/').let { it.isNotEmpty() && file.startsWith("$it/") } }) {
+            return true
+        }
+        return file.split('/').dropLast(1).any { it == "packageroot" }
+    }
+
+    private fun normalize(path: String): String = path.replace('\\', '/').lowercase()
+
     fun menuVisibility(selection: List<SelectedNode>, isWindows: Boolean): MenuVisibility {
         if (!isWindows) return MenuVisibility.HIDDEN
         val node = selection.singleOrNull() ?: return MenuVisibility.HIDDEN

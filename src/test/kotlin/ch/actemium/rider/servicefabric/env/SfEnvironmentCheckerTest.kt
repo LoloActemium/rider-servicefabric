@@ -53,6 +53,20 @@ class SfEnvironmentCheckerTest {
     }
 
     @Test
+    fun `cached sdk state is null until checked and after clear`() {
+        val schemas = Files.createDirectories(tmp.resolve("schemas"))
+        Files.writeString(schemas.resolve(SfEnvironmentRules.SERVICE_MODEL_XSD), "<xs/>")
+        sdkPath = { tmp.toString() }
+        val c = checker()
+        assertNull(c.cachedSdkState())
+        c.schemasDir()
+        assertEquals(schemas, c.cachedSdkState()?.schemasDir)
+        c.clearCache()
+        assertNull(c.cachedSdkState())
+        assertEquals(1, sdkCalls)
+    }
+
+    @Test
     fun `sdk failed without key or without xsd, unknown on registry error`() {
         assertEquals(CheckStatus.FAILED, checker().checkSdk().status)
         assertNull(checker().schemasDir())

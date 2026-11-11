@@ -57,4 +57,27 @@ class SfProjectRulesTest {
     fun `empty selection hides submenu`() {
         assertEquals(MenuVisibility.HIDDEN, SfProjectRules.menuVisibility(emptyList(), isWindows = true))
     }
+
+    private val sfDirs = listOf("C:\\repo\\vesact.auth.sf")
+
+    @Test
+    fun `files under SF project dir are in scope`() {
+        assertTrue(SfProjectRules.isInSfScope("C:\\repo\\vesact.auth.sf\\ApplicationPackageRoot\\ApplicationManifest.xml", sfDirs))
+        assertTrue(SfProjectRules.isInSfScope("c:/REPO/vesact.auth.sf/ApplicationParameters/Local.1Node.xml", sfDirs))
+        assertTrue(SfProjectRules.isInSfScope("C:\\repo\\vesact.auth.sf\\StartupServices.xml", listOf("C:/repo/vesact.auth.sf/")))
+    }
+
+    @Test
+    fun `files under a PackageRoot folder are in scope`() {
+        assertTrue(SfProjectRules.isInSfScope("C:\\repo\\vesact.auth.svc\\PackageRoot\\ServiceManifest.xml", sfDirs))
+        assertTrue(SfProjectRules.isInSfScope("C:/repo/vesact.auth.svc/packageroot/Config/Settings.xml", emptyList()))
+    }
+
+    @Test
+    fun `files outside SF scope are not in scope`() {
+        assertFalse(SfProjectRules.isInSfScope("C:\\repo\\other\\ApplicationManifest.xml", sfDirs))
+        assertFalse(SfProjectRules.isInSfScope("C:\\repo\\vesact.auth.sf.old\\ApplicationManifest.xml", sfDirs))
+        assertFalse(SfProjectRules.isInSfScope("C:\\repo\\PackageRoot.xml", emptyList()))
+        assertFalse(SfProjectRules.isInSfScope(null, sfDirs))
+    }
 }

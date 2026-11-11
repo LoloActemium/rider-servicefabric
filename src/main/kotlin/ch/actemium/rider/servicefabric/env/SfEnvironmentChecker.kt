@@ -86,7 +86,7 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
 
     constructor() : this(SfEnvironmentProbes.real())
 
-    private class SdkState(val result: CheckResult, val schemasDir: Path?)
+    internal class SdkState(val result: CheckResult, val schemasDir: Path?)
 
     @Volatile
     private var sdkCache: SdkState? = null
@@ -97,6 +97,9 @@ class SfEnvironmentChecker internal constructor(private val probes: SfEnvironmen
     fun checkSdk(): CheckResult = sdkState().result
 
     fun schemasDir(): Path? = sdkState().schemasDir
+
+    /** Cached SDK state, or null if the check has not run; never probes. */
+    internal fun cachedSdkState(): SdkState? = sdkCache
 
     private fun sdkState(): SdkState {
         sdkCache?.let { return it }

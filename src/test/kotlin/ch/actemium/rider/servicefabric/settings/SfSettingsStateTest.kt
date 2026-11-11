@@ -11,5 +11,6 @@ class SfSettingsStateTest {
         val state = SfSettingsState()
         assertFalse(state.executionPolicyBypass)
         assertTrue(state.autoCreateRunConfigurations)
+        assertTrue(state.removeFromClusterOnRiderClean)
     }
 }

@@ -30,6 +30,11 @@
         <xml.schemaProvider implementation="ch.actemium.rider.servicefabric.schema.SfSchemaProvider"/>
     </extensions>
 
+    <projectListeners>
+        <listener class="ch.actemium.rider.servicefabric.clean.SfRiderCleanListener"
+                  topic="com.intellij.openapi.actionSystem.ex.AnActionListener"/>
+    </projectListeners>
+
     <actions>
         <group id="ServiceFabric.ProjectMenu"
                class="ch.actemium.rider.servicefabric.actions.SfProjectActionGroup"

@@ -4,8 +4,10 @@ import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.backend.workspace.WorkspaceModel
 import com.jetbrains.rider.projectView.workspace.ProjectModelEntity
+import com.jetbrains.rider.projectView.workspace.containingProjectEntity
 import com.jetbrains.rider.projectView.workspace.findProjects
 import com.jetbrains.rider.projectView.workspace.getFile
 import com.jetbrains.rider.projectView.workspace.getProjectModelEntities
@@ -41,6 +43,21 @@ class SfProjectDetector(private val project: Project) {
 
     private fun selectedEntities(dataContext: DataContext): List<ProjectModelEntity> =
         dataContext.getProjectModelEntities(true).toList()
+
+    /** Project file paths of the loaded projects containing the selected entities (no I/O). */
+    fun selectedProjectPaths(dataContext: DataContext): List<String?> =
+        selectedEntities(dataContext).map { loadedProjectPath(it.containingProjectEntity()) }
+
+    /** Project file paths of the loaded projects containing [file] (no I/O). */
+    fun projectPathsOf(file: VirtualFile): List<String?> =
+        WorkspaceModel.getInstance(project).getProjectModelEntities(file, project)
+            .map { loadedProjectPath(it.containingProjectEntity()) }
+
+    /** Project file paths of all loaded SF projects. */
+    fun loadedSfProjectPaths(): List<String?> = sfProjects().map { loadedProjectPath(it) }
+
+    private fun loadedProjectPath(entity: ProjectModelEntity?): String? =
+        entity?.takeIf { !it.isUnloadedProject() }?.let { filePathOf(it) }
 
     private fun isSf(entity: ProjectModelEntity): Boolean = SfProjectRules.isSfProjectFile(filePathOf(entity))
 

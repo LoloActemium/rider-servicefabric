@@ -17,6 +17,10 @@ class SfConfigurable : BoundConfigurable(SfBundle.message("settings.displayName"
             row {
                 checkBox(SfBundle.message("settings.autoCreate.label")).bindSelected(settings::autoCreateRunConfigurations)
             }
+            row {
+                checkBox(SfBundle.message("settings.riderClean.label"))
+                    .bindSelected(settings::removeFromClusterOnRiderClean)
+            }
         }
     }
 }

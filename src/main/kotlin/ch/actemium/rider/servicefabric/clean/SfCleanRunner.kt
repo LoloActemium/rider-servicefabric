@@ -35,6 +35,7 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface CleanResult {
@@ -45,6 +46,9 @@ sealed interface CleanResult {
     data object Cancelled : CleanResult
     data object NotStarted : CleanResult
 }
+
+/** Outcome of [SfCleanRunner.runClusterOnly]. */
+enum class ClusterOnlyResult { REMOVED, FAILED, CANCELLED, SKIPPED }
 
 /** Console-side handler for the whole Clean sequence; Stop kills the running step's process tree. */
 private class SfSequenceProcessHandler : ProcessHandler() {
@@ -161,6 +165,88 @@ class SfCleanRunner(private val project: Project) {
                     try {
                         handler.finish(if (result is CleanResult.Success || result is CleanResult.Warning) 0 else 1)
                         notifyResult(result, projectName, typeName)
+                    } finally {
+                        onDone(result)
+                    }
+                }
+            }
+        }, project.disposed)
+    }
+
+    private val clusterOnlyTabs = ConcurrentHashMap<String, RunContentDescriptor>()
+
+    /**
+     * Rider Clean hook: local cluster step only (no MSBuild, no `pkg`), no notification.
+     * [onDone] is called exactly once. The caller owns [ch.actemium.rider.servicefabric.build.SfRunGuard].
+     */
+    fun runClusterOnly(sfproj: String, typeName: String, onDone: (ClusterOnlyResult) -> Unit) {
+        val done = AtomicBoolean(false)
+        val finish: (ClusterOnlyResult) -> Unit = { r -> if (done.compareAndSet(false, true)) onDone(r) }
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                prepareClusterOnly(sfproj, typeName, finish)
+            } catch (e: Exception) {
+                LOG.warn(e)
+                finish(ClusterOnlyResult.FAILED)
+            }
+        }
+    }
+
+    private fun prepareClusterOnly(sfproj: String, typeName: String, onDone: (ClusterOnlyResult) -> Unit) {
+        val projectFile = Path.of(sfproj).toAbsolutePath()
+        val projectDir = projectFile.parent
+        val projectName = projectFile.fileName.toString().substringBeforeLast('.')
+        val checker = SfEnvironmentChecker.getInstance()
+        val module = checker.checkModule()
+        val profile = projectDir.resolve("PublishProfiles").resolve(SfEnvironmentRules.LOCAL_PROFILE)
+        val cluster = checker.checkLocalCluster(profile)
+        if (SfCleanRules.clusterDecision(module.status, cluster.status) != ClusterDecision.RUN) {
+            LOG.info("Rider Clean: local cluster step skipped for $projectName (module ${module.status}, cluster ${cluster.status})")
+            onDone(ClusterOnlyResult.SKIPPED)
+            return
+        }
+        val bypass = SfSettings.getInstance().executionPolicyBypass
+        val key = projectFile.toString().lowercase()
+
+        val handler = SfSequenceProcessHandler()
+        ApplicationManager.getApplication().invokeLater({
+            try {
+                val console = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
+                ProcessTerminatedListener.attach(handler)
+                console.attachToProcess(handler)
+                val descriptor = RunContentDescriptor(
+                    console, handler, console.component, SfBundle.message("rclean.console.title", projectName),
+                )
+                Disposer.register(descriptor, console)
+                RunContentManager.getInstance(project).showRunContent(
+                    DefaultRunExecutor.getRunExecutorInstance(), descriptor, clusterOnlyTabs[key],
+                )
+                clusterOnlyTabs[key] = descriptor
+                Disposer.register(descriptor) { clusterOnlyTabs.remove(key, descriptor) }
+                handler.startNotify()
+            } catch (e: Exception) {
+                LOG.warn(e)
+                onDone(ClusterOnlyResult.FAILED)
+                return@invokeLater
+            }
+            ApplicationManager.getApplication().executeOnPooledThread {
+                var result = ClusterOnlyResult.FAILED
+                try {
+                    handler.print(
+                        SfBundle.message("clean.console.step.cluster", typeName, SfCleanRules.LOCAL_ENDPOINT) + "\n",
+                    )
+                    val exit = runStep(handler, projectDir, SfCleanRules.clusterArgs(bypass, typeName))
+                    result = when (SfCleanRules.clusterState(handler.isCancelled, exit)) {
+                        ClusterStepState.OK -> ClusterOnlyResult.REMOVED
+                        null -> ClusterOnlyResult.CANCELLED
+                        else -> ClusterOnlyResult.FAILED
+                    }
+                } catch (e: Exception) {
+                    LOG.warn(e)
+                    handler.print("\n${e.message ?: e}\n")
+                } finally {
+                    try {
+                        handler.finish(if (result == ClusterOnlyResult.REMOVED) 0 else 1)
                     } finally {
                         onDone(result)
                     }

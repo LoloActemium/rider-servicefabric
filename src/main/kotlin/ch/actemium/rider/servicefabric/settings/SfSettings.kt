@@ -10,6 +10,7 @@ import com.intellij.openapi.components.service
 class SfSettingsState : BaseState() {
     var executionPolicyBypass by property(false)
     var autoCreateRunConfigurations by property(true)
+    var removeFromClusterOnRiderClean by property(true)
 }
 
 @Service(Service.Level.APP)
@@ -23,6 +24,10 @@ class SfSettings : SimplePersistentStateComponent<SfSettingsState>(SfSettingsSta
     var autoCreateRunConfigurations: Boolean
         get() = state.autoCreateRunConfigurations
         set(value) { state.autoCreateRunConfigurations = value }
+
+    var removeFromClusterOnRiderClean: Boolean
+        get() = state.removeFromClusterOnRiderClean
+        set(value) { state.removeFromClusterOnRiderClean = value }
 
     companion object {
         fun getInstance(): SfSettings = service()

@@ -50,4 +50,12 @@ class SfRiderCleanRulesTest {
             SfRiderCleanRules.summary(listOf("b", "a"), listOf("c")),
         )
     }
+
+    @Test
+    fun `summary with only debug stopped is reported, sorted`() {
+        assertEquals(
+            RiderCleanSummary(emptyList(), emptyList(), listOf("a", "b")),
+            SfRiderCleanRules.summary(emptyList(), emptyList(), listOf("b", "a")),
+        )
+    }
 }

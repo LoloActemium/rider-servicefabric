@@ -6,7 +6,11 @@ import ch.actemium.rider.servicefabric.detection.SfProjectRules
 enum class RiderCleanScope { SOLUTION, SELECTION, CURRENT, NONE }
 
 /** Per-click outcome lists, for the summary notification; null when there is nothing to report. */
-data class RiderCleanSummary(val removed: List<String>, val failed: List<String>)
+data class RiderCleanSummary(
+    val removed: List<String>,
+    val failed: List<String>,
+    val debugStopped: List<String> = emptyList(),
+)
 
 object SfRiderCleanRules {
     private val SOLUTION_IDS = setOf("CleanSolutionAction")
@@ -29,6 +33,10 @@ object SfRiderCleanRules {
             .filter { seen.add(it.replace('/', '\\').lowercase()) }
     }
 
-    fun summary(removed: List<String>, failed: List<String>): RiderCleanSummary? =
-        if (removed.isEmpty() && failed.isEmpty()) null else RiderCleanSummary(removed.sorted(), failed.sorted())
+    fun summary(removed: List<String>, failed: List<String>, debugStopped: List<String> = emptyList()): RiderCleanSummary? =
+        if (removed.isEmpty() && failed.isEmpty() && debugStopped.isEmpty()) {
+            null
+        } else {
+            RiderCleanSummary(removed.sorted(), failed.sorted(), debugStopped.sorted())
+        }
 }

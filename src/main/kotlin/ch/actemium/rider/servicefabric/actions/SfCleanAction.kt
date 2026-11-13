@@ -9,6 +9,8 @@ import ch.actemium.rider.servicefabric.clean.SfCleanRunner
 import ch.actemium.rider.servicefabric.detection.MenuVisibility
 import ch.actemium.rider.servicefabric.detection.SfProjectDetector
 import ch.actemium.rider.servicefabric.env.SfEnvironmentChecker
+import ch.actemium.rider.servicefabric.run.SfDebugSessionTracker
+import ch.actemium.rider.servicefabric.run.SfDebugStopRules
 import ch.actemium.rider.servicefabric.versions.SfVersionRules
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -74,9 +76,13 @@ class SfCleanAction : AnAction(), DumbAware {
                 notify(project, SfBundle.message("clean.error.typeName", projectName))
                 return
             }
+            val tracker = SfDebugSessionTracker.getInstance(project)
+            val debugWarning = SfDebugStopRules.warning(tracker.aliveCount(sfproj)) {
+                SfBundle.message("clean.confirm.debugging", it)
+            }
             val answer = Messages.showYesNoDialog(
                 project,
-                SfBundle.message("clean.confirm.message", typeName, projectName),
+                SfDebugStopRules.withWarning(SfBundle.message("clean.confirm.message", typeName, projectName), debugWarning),
                 SfBundle.message("clean.confirm.title", projectName),
                 Messages.getWarningIcon(),
             )
@@ -89,6 +95,11 @@ class SfCleanAction : AnAction(), DumbAware {
             ApplicationManager.getApplication().executeOnPooledThread {
                 var started = false
                 try {
+                    try {
+                        if (tracker.hasAlive(sfproj)) tracker.stopAndWait(listOf(sfproj))
+                    } catch (ex: Exception) {
+                        LOG.warn("Cannot stop the debug sessions of $sfproj", ex)
+                    }
                     val resolved = try {
                         SfPackageAction.resolveConfiguration(active, solutionFile, sfproj)
                     } catch (ex: Exception) {

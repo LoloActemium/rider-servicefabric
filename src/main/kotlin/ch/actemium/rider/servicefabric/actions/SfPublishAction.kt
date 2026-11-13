@@ -12,6 +12,9 @@ import ch.actemium.rider.servicefabric.publish.PublishDialogModel
 import ch.actemium.rider.servicefabric.publish.SfPublishDialog
 import ch.actemium.rider.servicefabric.publish.SfPublishPipeline
 import ch.actemium.rider.servicefabric.publish.SfPublishRules
+import ch.actemium.rider.servicefabric.run.SfDebugSessionTracker
+import ch.actemium.rider.servicefabric.run.SfDebugStopRules
+import com.intellij.openapi.ui.Messages
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -69,10 +72,32 @@ class SfPublishAction : AnAction(), DumbAware {
                 return@executeOnPooledThread
             }
             ApplicationManager.getApplication().invokeLater({
+                val tracker = SfDebugSessionTracker.getInstance(project)
+                val debugWarning = SfDebugStopRules.warning(tracker.aliveCount(sfproj)) {
+                    SfBundle.message("publish.confirm.debugging", it)
+                }
+                if (debugWarning != null) {
+                    val answer = Messages.showYesNoDialog(
+                        project, debugWarning, SfBundle.message("publish.confirm.debugging.title", prepared.model.projectName),
+                        Messages.getWarningIcon(),
+                    )
+                    if (answer != Messages.YES) return@invokeLater
+                }
                 val dialog = SfPublishDialog(project, prepared.model)
                 if (!dialog.showAndGet()) return@invokeLater
                 val choice = dialog.choice() ?: return@invokeLater
-                SfPublishPipeline.getInstance(project).start(sfproj, choice, onDeployed = null)
+                val pipeline = SfPublishPipeline.getInstance(project)
+                if (!tracker.hasAlive(sfproj)) {
+                    pipeline.start(sfproj, choice, onDeployed = null)
+                    return@invokeLater
+                }
+                if (!SfRunGuard.getInstance(project).tryAcquire(sfproj)) {
+                    notifyError(project, SfBundle.message("publish.alreadyRunning", prepared.model.projectName))
+                    return@invokeLater
+                }
+                pipeline.start(sfproj, choice, onDeployed = null, guardAcquired = true) {
+                    tracker.stopAndWait(listOf(sfproj))
+                }
             }, project.disposed)
         }
     }

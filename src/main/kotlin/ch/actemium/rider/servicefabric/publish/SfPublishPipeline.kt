@@ -34,11 +34,19 @@ class SfPublishPipeline(private val project: Project) {
      * Call on the EDT. Returns false (and notifies) when a run is already in progress for [sfproj].
      * A blank [PublishChoice.configuration] means the active solution configuration.
      * [onDeployed] is called on a pooled thread with the deploy result, only when the deploy ran.
+     * When [guardAcquired] is true, the caller already holds the project guard and hands it over.
+     * [beforeRun] runs first on the pooled thread (guard held), e.g. to stop debug sessions.
      */
-    fun start(sfproj: String, choice: PublishChoice, onDeployed: ((DeployResult) -> Unit)?): Boolean {
+    fun start(
+        sfproj: String,
+        choice: PublishChoice,
+        onDeployed: ((DeployResult) -> Unit)?,
+        guardAcquired: Boolean = false,
+        beforeRun: (() -> Unit)? = null,
+    ): Boolean {
         val projectName = Path.of(sfproj).fileName.toString().substringBeforeLast('.')
         val guard = SfRunGuard.getInstance(project)
-        if (!guard.tryAcquire(sfproj)) {
+        if (!guardAcquired && !guard.tryAcquire(sfproj)) {
             notifyError(SfBundle.message("publish.alreadyRunning", projectName))
             return false
         }
@@ -51,6 +59,7 @@ class SfPublishPipeline(private val project: Project) {
             ApplicationManager.getApplication().executeOnPooledThread {
                 var handedOff = false
                 try {
+                    beforeRun?.invoke()
                     SfHealthMonitor.safely(project) { activityStarted(SfHealthMonitor.appTarget(sfproj, choice.profile)?.first) }
                     val wanted = if (choice.configuration.isBlank()) {
                         active

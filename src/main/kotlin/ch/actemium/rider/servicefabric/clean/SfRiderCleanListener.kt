@@ -4,6 +4,7 @@ import ch.actemium.rider.servicefabric.SfBundle
 import ch.actemium.rider.servicefabric.build.SfPackageRunner
 import ch.actemium.rider.servicefabric.build.SfRunGuard
 import ch.actemium.rider.servicefabric.detection.SfProjectDetector
+import ch.actemium.rider.servicefabric.run.SfDebugSessionTracker
 import ch.actemium.rider.servicefabric.settings.SfSettings
 import ch.actemium.rider.servicefabric.versions.SfVersionRules
 import com.intellij.notification.NotificationGroupManager
@@ -72,19 +73,32 @@ class SfRiderCleanListener(private val project: Project) : AnActionListener {
         val guard = SfRunGuard.getInstance(project)
         val removed = Collections.synchronizedList(mutableListOf<String>())
         val failed = Collections.synchronizedList(mutableListOf<String>())
+        val debugStopped = mutableListOf<String>()
         val remaining = AtomicInteger(targets.size)
         val completeOne = {
             if (remaining.decrementAndGet() == 0) {
-                SfRiderCleanRules.summary(removed.toList(), failed.toList())?.let { notifySummary(it) }
+                SfRiderCleanRules.summary(removed.toList(), failed.toList(), debugStopped.toList())
+                    ?.let { notifySummary(it) }
             }
         }
+        val acquired = mutableListOf<String>()
         for (sfproj in targets) {
-            val name = Path.of(sfproj).fileName.toString().substringBeforeLast('.')
-            if (!guard.tryAcquire(sfproj)) {
-                LOG.info("Rider Clean: $name is busy, local cluster step skipped")
+            if (guard.tryAcquire(sfproj)) {
+                acquired += sfproj
+            } else {
+                LOG.info("Rider Clean: ${nameOf(sfproj)} is busy, local cluster step skipped")
                 completeOne()
-                continue
             }
+        }
+        try {
+            val tracker = SfDebugSessionTracker.getInstance(project)
+            val withDebug = acquired.filter { tracker.hasAlive(it) }
+            if (withDebug.isNotEmpty()) debugStopped += tracker.stopAndWait(withDebug).map { nameOf(it) }
+        } catch (e: Exception) {
+            LOG.warn("Rider Clean: cannot stop the debug sessions", e)
+        }
+        for (sfproj in acquired) {
+            val name = nameOf(sfproj)
             var handedOff = false
             try {
                 val typeName = readTypeName(sfproj)
@@ -114,6 +128,8 @@ class SfRiderCleanListener(private val project: Project) : AnActionListener {
         }
     }
 
+    private fun nameOf(sfproj: String): String = Path.of(sfproj).fileName.toString().substringBeforeLast('.')
+
     private fun readTypeName(sfproj: String): String =
         try {
             SfVersionRules.load(Path.of(sfproj)) { p ->
@@ -132,6 +148,8 @@ class SfRiderCleanListener(private val project: Project) : AnActionListener {
 
     private fun notifySummary(summary: RiderCleanSummary) {
         val lines = listOfNotNull(
+            summary.debugStopped.takeIf { it.isNotEmpty() }
+                ?.let { SfBundle.message("rclean.summary.debugStopped", it.joinToString(", ")) },
             summary.removed.takeIf { it.isNotEmpty() }
                 ?.let { SfBundle.message("rclean.summary.removed", it.joinToString(", ")) },
             summary.failed.takeIf { it.isNotEmpty() }

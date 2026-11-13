@@ -124,8 +124,9 @@ tasks.register<Copy>("publishToRepository") {
 
 tasks.register("bumpVersion") {
     group = "distribution"
-    description = "Increments the patch number of pluginVersion in gradle.properties."
+    description = "Increments the patch number of pluginVersion in gradle.properties and removes stale plugin zips."
     val properties = layout.projectDirectory.file("gradle.properties")
+    val distributions = layout.buildDirectory.dir("distributions")
     doLast {
         val file = properties.asFile
         val text = file.readText()
@@ -134,6 +135,7 @@ tasks.register("bumpVersion") {
         val (major, minor, patch) = match.destructured
         val next = "$major.$minor.${patch.toInt() + 1}"
         file.writeText(text.replaceRange(match.range, "pluginVersion=$next"))
+        distributions.get().asFile.listFiles { f -> f.isFile && f.name.endsWith(".zip") }?.forEach { it.delete() }
         println("pluginVersion: $major.$minor.$patch -> $next")
     }
 }

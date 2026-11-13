@@ -9,6 +9,8 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.rider</depends>
+    <depends>com.intellij.xml</depends>
+    <depends>com.intellij.modules.jna</depends>
 
     <resource-bundle>messages.SfBundle</resource-bundle>
 

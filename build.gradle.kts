@@ -29,6 +29,10 @@ dependencies {
             rider(providers.gradleProperty("riderVersion")) { useInstaller = false }
         }
         bundledModule("intellij.rider.rdclient.dotnet")
+        bundledModule("intellij.platform.debugger")
+        bundledModule("intellij.platform.debugger.impl")
+        bundledPlugin("com.intellij.xml")
+        bundledPlugin("com.intellij.modules.jna")
     }
 
     testImplementation(platform("org.junit:junit-bom:5.13.4"))
@@ -42,8 +46,8 @@ intellijPlatform {
         name = "Azure Service Fabric"
         version = project.version.toString()
         ideaVersion {
-            sinceBuild = "262"
-            untilBuild = "262.*"
+            sinceBuild = "263"
+            untilBuild = "263.*"
         }
     }
     buildSearchableOptions = false
@@ -93,7 +97,7 @@ val generateUpdatePlugins = tasks.register("generateUpdatePlugins") {
             |<?xml version="1.0" encoding="UTF-8"?>
             |<plugins>
             |  <plugin id="ch.actemium.rider.servicefabric" url="$url" version="$pluginVersion">
-            |    <idea-version since-build="262" until-build="262.*"/>
+            |    <idea-version since-build="263" until-build="263.*"/>
             |    <name>Azure Service Fabric</name>
             |    <vendor>Actemium</vendor>
             |    <description>Package and publish Azure Service Fabric applications from Rider.</description>

@@ -11,6 +11,7 @@ class SfSettingsState : BaseState() {
     var executionPolicyBypass by property(false)
     var autoCreateRunConfigurations by property(true)
     var removeFromClusterOnRiderClean by property(true)
+    var healthPollSeconds by property(SfSettings.DEFAULT_POLL_SECONDS)
 }
 
 @Service(Service.Level.APP)
@@ -29,7 +30,16 @@ class SfSettings : SimplePersistentStateComponent<SfSettingsState>(SfSettingsSta
         get() = state.removeFromClusterOnRiderClean
         set(value) { state.removeFromClusterOnRiderClean = value }
 
+    /** Health polling interval of the status bar widget, in seconds (min 2). */
+    var healthPollSeconds: Int
+        get() = state.healthPollSeconds.coerceIn(MIN_POLL_SECONDS, MAX_POLL_SECONDS)
+        set(value) { state.healthPollSeconds = value.coerceIn(MIN_POLL_SECONDS, MAX_POLL_SECONDS) }
+
     companion object {
+        const val DEFAULT_POLL_SECONDS = 5
+        const val MIN_POLL_SECONDS = 2
+        const val MAX_POLL_SECONDS = 3600
+
         fun getInstance(): SfSettings = service()
     }
 }

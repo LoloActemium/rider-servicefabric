@@ -30,6 +30,10 @@
         <postStartupActivity
                 implementation="ch.actemium.rider.servicefabric.run.SfRunConfigurationAutoCreator$Startup"/>
         <xml.schemaProvider implementation="ch.actemium.rider.servicefabric.schema.SfSchemaProvider"/>
+        <statusBarWidgetFactory id="ServiceFabricHealth"
+                                implementation="ch.actemium.rider.servicefabric.health.SfHealthWidgetFactory"/>
+        <postStartupActivity
+                implementation="ch.actemium.rider.servicefabric.health.SfHealthWidgetFactory$Startup"/>
     </extensions>
 
     <projectListeners>

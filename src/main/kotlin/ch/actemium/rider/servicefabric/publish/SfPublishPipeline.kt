@@ -11,6 +11,7 @@ import ch.actemium.rider.servicefabric.build.SfRunGuard
 import ch.actemium.rider.servicefabric.env.EnvCheck
 import ch.actemium.rider.servicefabric.env.SfEnvironmentChecker
 import ch.actemium.rider.servicefabric.env.SfEnvironmentRules
+import ch.actemium.rider.servicefabric.health.SfHealthMonitor
 import ch.actemium.rider.servicefabric.settings.SfSettings
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -50,6 +51,7 @@ class SfPublishPipeline(private val project: Project) {
             ApplicationManager.getApplication().executeOnPooledThread {
                 var handedOff = false
                 try {
+                    SfHealthMonitor.safely(project) { activityStarted(SfHealthMonitor.appTarget(sfproj, choice.profile)?.first) }
                     val wanted = if (choice.configuration.isBlank()) {
                         active
                     } else {
@@ -113,7 +115,7 @@ class SfPublishPipeline(private val project: Project) {
             }
             SfPackageRunner.getInstance(project).runPackage(
                 sfproj, resolved.configuration, resolved.platform, resolved.warning, notify = false,
-            ) { result -> onPackaged(projectDir, projectName, choice, result, release, onDeployed) }
+            ) { result -> onPackaged(sfproj, projectDir, projectName, choice, result, release, onDeployed) }
             handedOff = true
         } catch (ex: Exception) {
             LOG.warn("Publish failed", ex)
@@ -124,6 +126,7 @@ class SfPublishPipeline(private val project: Project) {
     }
 
     private fun onPackaged(
+        sfproj: String,
         projectDir: Path,
         projectName: String,
         choice: PublishChoice,
@@ -157,6 +160,13 @@ class SfPublishPipeline(private val project: Project) {
             )
             SfDeployRunner.getInstance(project).runDeploy(projectName, projectDir.toFile(), args) { deployed ->
                 try {
+                    SfHealthMonitor.safely(project) {
+                        deploymentEnded(
+                            SfHealthMonitor.appTarget(sfproj, choice.profile)?.first,
+                            SfHealthMonitor.deployedVersion(sfproj),
+                            deployed == DeployResult.Success,
+                        )
+                    }
                     onDeployed?.invoke(deployed)
                 } catch (ex: Exception) {
                     LOG.warn("Post-deploy step failed", ex)

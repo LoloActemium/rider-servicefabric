@@ -1,8 +1,11 @@
 package ch.actemium.rider.servicefabric.settings
 
 import ch.actemium.rider.servicefabric.SfBundle
+import ch.actemium.rider.servicefabric.health.SfHealthMonitor
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.ui.dsl.builder.bindIntText
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 
@@ -21,6 +24,19 @@ class SfConfigurable : BoundConfigurable(SfBundle.message("settings.displayName"
                 checkBox(SfBundle.message("settings.riderClean.label"))
                     .bindSelected(settings::removeFromClusterOnRiderClean)
             }
+            row(SfBundle.message("settings.healthPoll.label")) {
+                intTextField(SfSettings.MIN_POLL_SECONDS..SfSettings.MAX_POLL_SECONDS)
+                    .bindIntText(settings::healthPollSeconds)
+                    .comment(SfBundle.message("settings.healthPoll.comment"))
+            }
+        }
+    }
+
+    override fun apply() {
+        val before = SfSettings.getInstance().healthPollSeconds
+        super.apply()
+        if (SfSettings.getInstance().healthPollSeconds != before) {
+            ProjectManager.getInstance().openProjects.forEach { SfHealthMonitor.safely(it) { refreshNow() } }
         }
     }
 }

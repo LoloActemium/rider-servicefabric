@@ -6,6 +6,7 @@ import ch.actemium.rider.servicefabric.build.MsBuildOutputFilter
 import ch.actemium.rider.servicefabric.build.SfPackageRunner
 import ch.actemium.rider.servicefabric.env.SfEnvironmentChecker
 import ch.actemium.rider.servicefabric.env.SfEnvironmentRules
+import ch.actemium.rider.servicefabric.health.SfHealthMonitor
 import ch.actemium.rider.servicefabric.settings.SfSettings
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
@@ -95,6 +96,7 @@ class SfCleanRunner(private val project: Project) {
     ) {
         val done = AtomicBoolean(false)
         val finish: (CleanResult) -> Unit = { r -> if (done.compareAndSet(false, true)) onDone(r) }
+        SfHealthMonitor.safely(project) { activityStarted() }
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 prepare(sfproj, typeName, configuration, platform, warning, finish)
@@ -182,6 +184,7 @@ class SfCleanRunner(private val project: Project) {
     fun runClusterOnly(sfproj: String, typeName: String, onDone: (ClusterOnlyResult) -> Unit) {
         val done = AtomicBoolean(false)
         val finish: (ClusterOnlyResult) -> Unit = { r -> if (done.compareAndSet(false, true)) onDone(r) }
+        SfHealthMonitor.safely(project) { activityStarted() }
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 prepareClusterOnly(sfproj, typeName, finish)

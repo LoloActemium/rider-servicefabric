@@ -14,9 +14,11 @@ import com.intellij.execution.configurations.ConfigurationTypeBase
 import com.intellij.execution.configurations.RunConfiguration
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunConfigurationOptions
+import com.intellij.execution.configurations.RunConfigurationWithSuppressedDefaultDebugAction
 import com.intellij.execution.configurations.RunProfileState
 import com.intellij.execution.configurations.RuntimeConfigurationError
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.execution.runners.RunConfigurationWithSuppressedDefaultRunAction
 import com.intellij.openapi.components.BaseState
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
@@ -68,7 +70,9 @@ class SfRunConfigurationOptions : RunConfigurationOptions() {
 }
 
 class SfRunConfiguration(project: Project, factory: ConfigurationFactory, name: String) :
-    RunConfigurationBase<SfRunConfigurationOptions>(project, factory, name) {
+    RunConfigurationBase<SfRunConfigurationOptions>(project, factory, name),
+    RunConfigurationWithSuppressedDefaultRunAction,
+    RunConfigurationWithSuppressedDefaultDebugAction {
 
     public override fun getOptions(): SfRunConfigurationOptions = super.getOptions() as SfRunConfigurationOptions
 

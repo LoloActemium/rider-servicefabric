@@ -128,6 +128,32 @@ object SfDebugRules {
         return plain.firstOrNull { NET.containsMatchIn(displayNames[it]) } ?: plain.firstOrNull() ?: 0
     }
 
+    /** Session capture is complete once at least one new session exists per successful attach. */
+    fun enoughSessions(sessionCount: Int, attachedCount: Int): Boolean = sessionCount >= attachedCount
+
+    /**
+     * Indices of new sessions to track, given their debuggee PIDs (null = unknown) and the sessions already tracked:
+     * each is accepted in order by [acceptLateSession], so unknown-PID sessions never push the total past the
+     * number of attached PIDs, and sessions with a known foreign PID are skipped.
+     */
+    fun selectSessions(sessionPids: List<Int?>, attachedPids: Collection<Int>, trackedCount: Int = 0): List<Int> {
+        var count = trackedCount
+        return sessionPids.indices.filter {
+            acceptLateSession(sessionPids[it], attachedPids, count).also { ok -> if (ok) count++ }
+        }
+    }
+
+    /** Whether a session appearing after the capture wait belongs to the attach run. */
+    fun acceptLateSession(pid: Int?, attachedPids: Collection<Int>, trackedCount: Int): Boolean =
+        if (pid != null) pid in attachedPids else trackedCount < attachedPids.size
+
+    /** Attached PIDs with no tracked session; sessions with unknown PIDs cover unmatched PIDs in order. */
+    fun pidsWithoutSession(attachedPids: List<Int>, sessionPids: List<Int?>): List<Int> {
+        val unmatched = attachedPids.filter { it !in sessionPids }
+        val unknown = sessionPids.count { it == null }
+        return unmatched.drop(unknown)
+    }
+
     fun summarize(
         attached: List<String>,
         failed: List<String>,

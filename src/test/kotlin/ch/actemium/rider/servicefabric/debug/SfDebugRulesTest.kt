@@ -11,6 +11,42 @@ import org.junit.jupiter.api.Test
 
 class SfDebugRulesTest {
 
+    @Test
+    fun `capture is complete once each attach has a session`() {
+        assertFalse(SfDebugRules.enoughSessions(2, 3))
+        assertTrue(SfDebugRules.enoughSessions(3, 3))
+        assertTrue(SfDebugRules.enoughSessions(4, 3))
+    }
+
+    @Test
+    fun `sessions with matching or unknown PID are selected, foreign PIDs skipped`() {
+        assertEquals(listOf(0, 2), SfDebugRules.selectSessions(listOf(10, 99, null), listOf(10, 20)))
+        assertEquals(listOf(0, 1, 2), SfDebugRules.selectSessions(listOf(null, null, null), listOf(10, 20, 30)))
+    }
+
+    @Test
+    fun `unknown-PID sessions are capped at the attached count`() {
+        assertEquals(listOf(0, 1), SfDebugRules.selectSessions(listOf(null, null, null, null), listOf(10, 20)))
+        assertEquals(listOf(0), SfDebugRules.selectSessions(listOf(null, null, null), listOf(10, 20), trackedCount = 1))
+        assertEquals(emptyList<Int>(), SfDebugRules.selectSessions(listOf(null), listOf(10, 20), trackedCount = 2))
+        assertEquals(listOf(1), SfDebugRules.selectSessions(listOf(null, 20), listOf(10, 20), trackedCount = 2))
+    }
+
+    @Test
+    fun `late sessions accepted by PID match or while attach count not reached`() {
+        assertTrue(SfDebugRules.acceptLateSession(20, listOf(10, 20), 5))
+        assertFalse(SfDebugRules.acceptLateSession(99, listOf(10, 20), 0))
+        assertTrue(SfDebugRules.acceptLateSession(null, listOf(10, 20, 30), 2))
+        assertFalse(SfDebugRules.acceptLateSession(null, listOf(10, 20, 30), 3))
+    }
+
+    @Test
+    fun `pids without session are reported`() {
+        assertEquals(listOf(30), SfDebugRules.pidsWithoutSession(listOf(10, 20, 30), listOf(10, 20)))
+        assertEquals(emptyList<Int>(), SfDebugRules.pidsWithoutSession(listOf(10, 20, 30), listOf(null, null, null)))
+        assertEquals(listOf(30), SfDebugRules.pidsWithoutSession(listOf(10, 20, 30), listOf(null, null)))
+    }
+
     private val profile = """
         <?xml version="1.0" encoding="utf-8"?>
         <PublishProfile xmlns="http://schemas.microsoft.com/2015/05/fabrictools">

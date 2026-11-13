@@ -108,6 +108,7 @@ class SfRunProgramRunner : ProgramRunner<RunnerSettings> {
         }
         val attacher = SfDebugAttacher(project)
         val attached = mutableListOf<String>()
+        val attachedPids = mutableListOf<Int>()
         val failed = mutableListOf<String>()
         for (p in started) {
             val error = try {
@@ -116,10 +117,15 @@ class SfRunProgramRunner : ProgramRunner<RunnerSettings> {
                 LOG.warn("Attach failed", e)
                 e.message ?: e.toString()
             }
-            if (error == null) attached += label(p) else failed += "${label(p)}: $error"
+            if (error == null) {
+                attached += label(p)
+                attachedPids += p.processId
+            } else {
+                failed += "${label(p)}: $error"
+            }
         }
         val tracker = SfDebugSessionTracker.getInstance(project)
-        attacher.sessions.forEach { tracker.register(sfproj, it) }
+        attacher.captureSessions(attachedPids) { tracker.register(sfproj, it) }
         val summary = SfDebugRules.summarize(attached, failed, packages, expected)
         val lines = buildList {
             add(SfBundle.message("debug.attached", summary.attached.size, summary.attached.joinToString(", ")))

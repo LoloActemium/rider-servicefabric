@@ -28,6 +28,10 @@ object SfRunConfigurationRules {
 
     fun key(path: String): String = path.replace('/', '\\').lowercase()
 
+    /** True when [configuredPaths] contains [projectPath] (case/slash-insensitive). */
+    fun hasConfiguration(projectPath: String, configuredPaths: Collection<String>): Boolean =
+        configuredPaths.any { key(it) == key(projectPath) }
+
     /** SF projects not yet in [handled] (key-normalized, distinct): recorded so a later deletion is not undone. */
     fun newlyHandled(sfProjects: List<String>, handled: Collection<String>): List<String> {
         val done = handled.map(::key).toSet()

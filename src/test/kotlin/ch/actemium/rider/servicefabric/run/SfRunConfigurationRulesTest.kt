@@ -4,7 +4,9 @@ import ch.actemium.rider.servicefabric.publish.OverwriteBehavior
 import ch.actemium.rider.servicefabric.publish.ProfileInfo
 import ch.actemium.rider.servicefabric.publish.SfPublishRules
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SfRunConfigurationRulesTest {
@@ -45,7 +47,15 @@ class SfRunConfigurationRulesTest {
     }
 
     @Test
+    fun `has configuration ignores case and slashes`() {
+        assertTrue(SfRunConfigurationRules.hasConfiguration(auth, listOf(log, auth.replace('\\', '/').uppercase())))
+        assertFalse(SfRunConfigurationRules.hasConfiguration(auth, listOf(log)))
+        assertFalse(SfRunConfigurationRules.hasConfiguration(auth, emptyList()))
+    }
+
+    @Test
     fun `configuration name is the project name`() {
+        assertEquals("etavis.Warehouse.sf", SfRunConfigurationRules.configurationName("C:/r/etavis.Warehouse.sf/etavis.Warehouse.sf.sfproj"))
         assertEquals("vesact.auth.sf", SfRunConfigurationRules.configurationName(auth))
     }
 

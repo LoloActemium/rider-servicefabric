@@ -51,6 +51,8 @@
                     class="ch.actemium.rider.servicefabric.actions.SfCleanAction"/>
             <action id="ServiceFabric.EditVersions"
                     class="ch.actemium.rider.servicefabric.actions.SfEditVersionsAction"/>
+            <action id="ServiceFabric.CreateRunConfiguration"
+                    class="ch.actemium.rider.servicefabric.actions.SfCreateRunConfigurationAction"/>
             <separator/>
             <action id="ServiceFabric.RecheckEnvironment"
                     class="ch.actemium.rider.servicefabric.actions.SfRecheckEnvironmentAction"/>

@@ -4,6 +4,8 @@ import ch.actemium.rider.servicefabric.detection.SfProjectDetector
 import ch.actemium.rider.servicefabric.publish.SfPublishRules
 import ch.actemium.rider.servicefabric.settings.SfSettings
 import com.intellij.execution.RunManager
+import com.intellij.execution.RunnerAndConfigurationSettings
+import com.intellij.execution.configurations.ConfigurationTypeUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.BaseState
@@ -70,25 +72,8 @@ class SfRunConfigurationAutoCreator(private val project: Project) :
         )
         // Projects that already have a configuration count as handled: deleting it later must not recreate it.
         val newlyHandled = SfRunConfigurationRules.newlyHandled(sfProjects, handled)
-        val type = SfRunConfigurationType::class.java.let {
-            com.intellij.execution.configurations.ConfigurationTypeUtil.findConfigurationType(it)
-        }
         for (sfproj in toCreate) {
-            val settings = runManager.createConfiguration(SfRunConfigurationRules.configurationName(sfproj), type.factory)
-            val configuration = settings.configuration as SfRunConfiguration
-            configuration.projectPath = sfproj
-            val profiles = SfRunConfigurationEditor.profilesOf(sfproj)
-            configuration.profile = SfPublishRules.defaultProfile(profiles).orEmpty()
-            val xml = try {
-                configuration.profileFile()?.takeIf { Files.isRegularFile(it) }?.let { Files.readString(it) }
-            } catch (_: Exception) {
-                null
-            }
-            configuration.overwrite = SfPublishRules.defaultOverwrite(
-                if (configuration.profile.isEmpty()) null else SfPublishRules.parseProfile(xml),
-            )
-            settings.storeInLocalWorkspace()
-            runManager.addConfiguration(settings)
+            val settings = createFor(project, sfproj, uniqueName = false)
             if (runManager.selectedConfiguration == null) runManager.selectedConfiguration = settings
         }
         if (newlyHandled.isNotEmpty()) {
@@ -107,5 +92,32 @@ class SfRunConfigurationAutoCreator(private val project: Project) :
 
     companion object {
         private val LOG = logger<SfRunConfigurationAutoCreator>()
+
+        /**
+         * Creates and adds a workspace-local configuration for [sfproj] with the default profile and overwrite.
+         * With [uniqueName], the name is made unique among existing configurations of the type.
+         */
+        fun createFor(project: Project, sfproj: String, uniqueName: Boolean): RunnerAndConfigurationSettings {
+            val runManager = RunManager.getInstance(project)
+            val type = ConfigurationTypeUtil.findConfigurationType(SfRunConfigurationType::class.java)
+            val baseName = SfRunConfigurationRules.configurationName(sfproj)
+            val name = if (uniqueName) runManager.suggestUniqueName(baseName, null) else baseName
+            val settings = runManager.createConfiguration(name, type.factory)
+            val configuration = settings.configuration as SfRunConfiguration
+            configuration.projectPath = sfproj
+            val profiles = SfRunConfigurationEditor.profilesOf(sfproj)
+            configuration.profile = SfPublishRules.defaultProfile(profiles).orEmpty()
+            val xml = try {
+                configuration.profileFile()?.takeIf { Files.isRegularFile(it) }?.let { Files.readString(it) }
+            } catch (_: Exception) {
+                null
+            }
+            configuration.overwrite = SfPublishRules.defaultOverwrite(
+                if (configuration.profile.isEmpty()) null else SfPublishRules.parseProfile(xml),
+            )
+            settings.storeInLocalWorkspace()
+            runManager.addConfiguration(settings)
+            return settings
+        }
     }
 }

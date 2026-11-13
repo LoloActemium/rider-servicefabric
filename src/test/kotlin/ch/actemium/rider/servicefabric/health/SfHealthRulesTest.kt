@@ -133,6 +133,8 @@ class SfHealthRulesTest {
         }
     }
 
+    private val G = Long.MAX_VALUE
+
     private fun view(version: String, health: String = "Ok") = SfHealthRules.appView(
         "fabric:/a", up,
         ApiOutcome.Response(200, """{"TypeVersion":"$version","Status":"Ready","HealthState":"$health"}"""), null,
@@ -142,9 +144,9 @@ class SfHealthRulesTest {
     fun `ready arming notifies once`() {
         val a = ReadyArming()
         a.arm("fabric:/a", "2.0", 0)
-        assertFalse(a.consume(view("2.0", "Warning"), 1_000))
-        assertTrue(a.consume(view("2.0"), 2_000))
-        assertFalse(a.consume(view("2.0"), 3_000))
+        assertFalse(a.consume(view("2.0", "Warning"), 1_000, 0, G))
+        assertTrue(a.consume(view("2.0"), 2_000, 0, G))
+        assertFalse(a.consume(view("2.0"), 3_000, 0, G))
     }
 
     @Test
@@ -152,18 +154,87 @@ class SfHealthRulesTest {
         val a = ReadyArming()
         a.arm("fabric:/a", "2.0", 0)
         a.disarm("fabric:/a")
-        assertFalse(a.consume(view("2.0"), 1))
+        assertFalse(a.consume(view("2.0"), 1, 0, G))
 
         a.arm("fabric:/a", "2.0", 0)
         assertTrue("fabric:/a" in a.armedApps(SfHealthRules.ARM_WINDOW_MS - 1))
-        assertFalse(a.consume(view("2.0"), SfHealthRules.ARM_WINDOW_MS))
+        assertFalse(a.consume(view("2.0"), SfHealthRules.ARM_WINDOW_MS, 0, G))
 
         a.arm("fabric:/a", "2.0", 0)
-        assertFalse(a.consume(view("1.0"), 1))
-        assertTrue(a.consume(view("2.0"), 2))
+        assertFalse(a.consume(view("1.0"), 1, 0, G))
+        assertTrue(a.consume(view("2.0"), 2, 0, G))
 
         a.arm("fabric:/a", null, 0)
-        assertTrue(a.consume(view("1.0"), 1))
+        assertTrue(a.consume(view("1.0"), 1, 0, G))
+    }
+
+    @Test
+    fun `ready arming I2 sequence waits for a stable streak`() {
+        val a = ReadyArming()
+        val s = 30_000L
+        a.arm("fabric:/a", "2.0", 0)
+        assertFalse(a.consume(view("2.0"), 0, s, G)) // 16:22:24 Ok, streak starts
+        assertFalse(a.consume(view("2.0"), 20_000, s, G))
+        assertFalse(a.consume(view("2.0", "Error"), 21_000, s, G)) // 16:22:45 Error resets
+        assertFalse(a.consume(view("2.0", "Error"), 56_000, s, G))
+        assertFalse(a.consume(view("2.0"), 57_000, s, G)) // 16:23:21 Ok again
+        assertFalse(a.consume(view("2.0"), 86_000, s, G))
+        assertTrue(a.consume(view("2.0"), 87_000, s, G)) // ~16:23:51
+        assertFalse(a.consume(view("2.0"), 90_000, s, G))
+    }
+
+    @Test
+    fun `ready arming stable from start, zero, flapping, mismatch, expiry`() {
+        val a = ReadyArming()
+        a.arm("fabric:/a", "2.0", 0)
+        assertFalse(a.consume(view("2.0"), 1_000, 30_000, G))
+        assertTrue(a.consume(view("2.0"), 31_000, 30_000, G))
+
+        a.arm("fabric:/a", "2.0", 0)
+        assertTrue(a.consume(view("2.0"), 1_000, 0, G))
+
+        a.arm("fabric:/a", "2.0", 0)
+        for (t in 0L until 120_000L step 10_000L) {
+            val h = if ((t / 10_000) % 2 == 0L) "Ok" else "Warning"
+            assertFalse(a.consume(view("2.0", h), t, 30_000, G))
+        }
+        assertFalse(a.consume(view("2.0"), 130_000, 30_000, G))
+        assertTrue(a.consume(view("2.0"), 160_000, 30_000, G))
+
+        a.arm("fabric:/a", "2.0", 0)
+        assertFalse(a.consume(view("1.0"), 0, 30_000, G))
+        assertFalse(a.consume(view("1.0"), 40_000, 30_000, G))
+        assertFalse(a.consume(view("2.0"), 41_000, 30_000, G))
+
+        a.arm("fabric:/a", "2.0", 0)
+        val w = SfHealthRules.ARM_WINDOW_MS
+        assertFalse(a.consume(view("2.0"), w - 10_000, 30_000, G))
+        assertFalse(a.consume(view("2.0"), w + 30_000, 30_000, G))
+        assertTrue(a.armedApps(w + 30_000).isEmpty())
+    }
+
+    @Test
+    fun `ready arming streak resets after an unobserved gap or a missing app`() {
+        val a = ReadyArming()
+        a.arm("fabric:/a", "2.0", 0)
+        assertFalse(a.consume(view("2.0"), 0, 30_000, 7_000))
+        assertFalse(a.consume(view("2.0"), 40_000, 30_000, 7_000)) // gap > maxGap: streak restarts
+        for (t in 46_000L..64_000L step 6_000L) assertFalse(a.consume(view("2.0"), t, 30_000, 7_000))
+        assertTrue(a.consume(view("2.0"), 70_000, 30_000, 7_000))
+
+        a.arm("fabric:/a", "2.0", 0)
+        assertFalse(a.consume(view("2.0"), 0, 30_000, 7_000))
+        a.observeMissing(emptySet(), 5_000)
+        assertFalse(a.consume(view("2.0"), 10_000, 30_000, 7_000))
+        assertFalse(a.consume(view("2.0"), 35_000, 30_000, G))
+        assertTrue(a.consume(view("2.0"), 40_000, 30_000, G))
+    }
+
+    @Test
+    fun `background polling only while armed`() {
+        assertTrue(SfHealthRules.shouldPoll(appActive = true, anyArmed = false))
+        assertTrue(SfHealthRules.shouldPoll(appActive = false, anyArmed = true))
+        assertFalse(SfHealthRules.shouldPoll(appActive = false, anyArmed = false))
     }
 
     @Test

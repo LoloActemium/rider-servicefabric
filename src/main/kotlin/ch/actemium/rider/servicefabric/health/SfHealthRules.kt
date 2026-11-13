@@ -219,6 +219,9 @@ object SfHealthRules {
 
     const val ARM_WINDOW_MS = 30 * 60_000L
 
+    /** Poll this tick? Always when Rider is active; in background only while a deployment is armed. */
+    fun shouldPoll(appActive: Boolean, anyArmed: Boolean): Boolean = appActive || anyArmed
+
     /** Tooltip lines; [msg] resolves `health.*` bundle keys. */
     fun tooltipLines(snapshot: HealthSnapshot, msg: (String, Array<out Any>) -> String): List<String> = buildList {
         add(clusterLine(snapshot.cluster, msg))
@@ -272,7 +275,9 @@ object SfHealthRules {
  * consumed once. Thread-safe.
  */
 class ReadyArming {
-    private data class Arm(val version: String?, val expiresAt: Long)
+    private data class Arm(val version: String?, val expiresAt: Long, val streakStart: Long? = null,
+        val lastObservedAt: Long? = null,
+    )
 
     private val arms = java.util.concurrent.ConcurrentHashMap<String, Arm>()
 
@@ -289,16 +294,38 @@ class ReadyArming {
         return arms.keys.toSet()
     }
 
-    /** True exactly once for an armed, unexpired app that is Ready+Ok on the deployed version (if known). */
-    fun consume(view: AppView, nowMs: Long): Boolean {
-        val arm = arms[view.name] ?: return false
-        if (arm.expiresAt <= nowMs) {
-            arms.remove(view.name, arm)
-            return false
+    /** Armed apps not in [observed] were not seen by this poll: their healthy streak restarts. */
+    fun observeMissing(observed: Collection<String>, nowMs: Long) {
+        for (app in arms.keys) {
+            if (app !in observed) arms.computeIfPresent(app) { _, a -> a.copy(streakStart = null, lastObservedAt = nowMs) }
         }
-        if (!SfHealthRules.shouldNotifyReady(true, view)) return false
-        if (arm.version != null && arm.version != view.info?.version) return false
-        return arms.remove(view.name, arm)
+    }
+
+    /**
+     * True exactly once for an armed, unexpired app that stayed Ready+Ok on the deployed version (if known) for
+     * [stableMs], with no gap longer than [maxGapMs] between observations.
+     */
+    fun consume(view: AppView, nowMs: Long, stableMs: Long, maxGapMs: Long): Boolean {
+        var fire = false
+        arms.computeIfPresent(view.name) { _, a ->
+            val healthy = SfHealthRules.shouldNotifyReady(true, view) &&
+                (a.version == null || a.version == view.info?.version)
+            val gap = a.lastObservedAt != null && nowMs - a.lastObservedAt > maxGapMs
+            when {
+                a.expiresAt <= nowMs -> null
+                !healthy -> a.copy(streakStart = null, lastObservedAt = nowMs)
+                else -> {
+                    val start = a.streakStart?.takeUnless { gap } ?: nowMs
+                    if (nowMs - start >= stableMs.coerceAtLeast(0L)) {
+                        fire = true
+                        null
+                    } else {
+                        a.copy(streakStart = start, lastObservedAt = nowMs)
+                    }
+                }
+            }
+        }
+        return fire
     }
 }
 

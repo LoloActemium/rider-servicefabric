@@ -29,6 +29,11 @@ class SfConfigurable : BoundConfigurable(SfBundle.message("settings.displayName"
                     .bindIntText(settings::healthPollSeconds)
                     .comment(SfBundle.message("settings.healthPoll.comment"))
             }
+            row(SfBundle.message("settings.readyStable.label")) {
+                intTextField(SfSettings.MIN_READY_STABLE_SECONDS..SfSettings.MAX_READY_STABLE_SECONDS)
+                    .bindIntText(settings::readyStableSeconds)
+                    .comment(SfBundle.message("settings.readyStable.comment"))
+            }
         }
     }
 

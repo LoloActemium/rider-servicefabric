@@ -119,7 +119,9 @@ class SfHealthMonitor(private val project: Project) : Disposable {
             return
         }
         try {
-            if (ApplicationManager.getApplication().isActive) poll()
+            val now = System.currentTimeMillis()
+            val active = ApplicationManager.getApplication().isActive
+            if (SfHealthRules.shouldPoll(active, armed.armedApps(now).isNotEmpty())) poll()
         } catch (e: Throwable) {
             LOG.debug("Health poll failed", e)
         } finally {
@@ -142,7 +144,10 @@ class SfHealthMonitor(private val project: Project) : Disposable {
             !project.isDisposed && SfProjectDetector.getInstance(project).sfProjects().isNotEmpty()
         }
         if (hadSf != hasSfProjects) updateWidgetVisibility()
-        if (!hasSfProjects) return
+        if (!hasSfProjects) {
+            armed.observeMissing(emptySet(), System.currentTimeMillis())
+            return
+        }
 
         val targets = sfprojs.mapNotNull { defaultTarget(it) }
         host = targets.firstOrNull()?.second ?: SfEnvironmentRules.DEFAULT_HOST
@@ -171,8 +176,12 @@ class SfHealthMonitor(private val project: Project) : Disposable {
         }
         snapshot = HealthSnapshot(cluster, apps)
         val polledAt = System.currentTimeMillis()
+        val settings = SfSettings.getInstance()
+        val stableMs = settings.readyStableSeconds * 1000L
+        val maxGapMs = 2 * SfHealthRules.pollDelayMs(settings.healthPollSeconds, polledAt, fastUntil) + 3_000L
+        armed.observeMissing(apps.map { it.name }, polledAt)
         for (view in apps) {
-            if (armed.consume(view, polledAt)) notifyReady(view.name)
+            if (armed.consume(view, polledAt, stableMs, maxGapMs)) notifyReady(view.name)
         }
         listeners.forEach { it() }
     }

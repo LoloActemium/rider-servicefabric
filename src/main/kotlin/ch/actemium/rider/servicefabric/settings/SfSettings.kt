@@ -12,6 +12,7 @@ class SfSettingsState : BaseState() {
     var autoCreateRunConfigurations by property(true)
     var removeFromClusterOnRiderClean by property(true)
     var healthPollSeconds by property(SfSettings.DEFAULT_POLL_SECONDS)
+    var readyStableSeconds by property(SfSettings.DEFAULT_READY_STABLE_SECONDS)
 }
 
 @Service(Service.Level.APP)
@@ -35,7 +36,15 @@ class SfSettings : SimplePersistentStateComponent<SfSettingsState>(SfSettingsSta
         get() = state.healthPollSeconds.coerceIn(MIN_POLL_SECONDS, MAX_POLL_SECONDS)
         set(value) { state.healthPollSeconds = value.coerceIn(MIN_POLL_SECONDS, MAX_POLL_SECONDS) }
 
+    /** Continuous Ready+Ok duration before the "ready" notification, in seconds (0 = first Ready+Ok). */
+    var readyStableSeconds: Int
+        get() = state.readyStableSeconds.coerceIn(MIN_READY_STABLE_SECONDS, MAX_READY_STABLE_SECONDS)
+        set(value) { state.readyStableSeconds = value.coerceIn(MIN_READY_STABLE_SECONDS, MAX_READY_STABLE_SECONDS) }
+
     companion object {
+        const val DEFAULT_READY_STABLE_SECONDS = 30
+        const val MIN_READY_STABLE_SECONDS = 0
+        const val MAX_READY_STABLE_SECONDS = 600
         const val DEFAULT_POLL_SECONDS = 5
         const val MIN_POLL_SECONDS = 2
         const val MAX_POLL_SECONDS = 3600

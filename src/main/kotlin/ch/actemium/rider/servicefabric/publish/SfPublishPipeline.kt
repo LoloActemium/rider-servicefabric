@@ -156,13 +156,12 @@ class SfPublishPipeline(private val project: Project) {
                 choice.profileInfo.upgradeEnabled,
             )
             SfDeployRunner.getInstance(project).runDeploy(projectName, projectDir.toFile(), args) { deployed ->
-                release()
-                if (onDeployed != null) {
-                    try {
-                        onDeployed(deployed)
-                    } catch (ex: Exception) {
-                        LOG.warn("Post-deploy step failed", ex)
-                    }
+                try {
+                    onDeployed?.invoke(deployed)
+                } catch (ex: Exception) {
+                    LOG.warn("Post-deploy step failed", ex)
+                } finally {
+                    release()
                 }
             }
             handedOff = true

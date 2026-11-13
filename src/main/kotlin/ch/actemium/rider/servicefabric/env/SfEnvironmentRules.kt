@@ -25,7 +25,9 @@ enum class ServiceState { RUNNING, NOT_RUNNING, UNKNOWN }
 
 data class ClusterTarget(val local: Boolean, val host: String, val port: Int)
 
-data class ProbeOutput(val exitCode: Int, val stdout: String, val timedOut: Boolean)
+data class ProbeOutput(val exitCode: Int, val stdout: String, val timedOut: Boolean, val stderr: String) {
+    constructor(exitCode: Int, stdout: String, timedOut: Boolean) : this(exitCode, stdout, timedOut, "")
+}
 
 object SfEnvironmentRules {
     const val DEFAULT_HOST = "localhost"

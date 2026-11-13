@@ -2,7 +2,9 @@ package ch.actemium.rider.servicefabric.run
 
 import ch.actemium.rider.servicefabric.SfBundle
 import ch.actemium.rider.servicefabric.build.SfPackageRunner
+import ch.actemium.rider.servicefabric.build.SfRunGuard
 import ch.actemium.rider.servicefabric.debug.DeployedCodePackage
+import ch.actemium.rider.servicefabric.debug.ExpectedCodePackage
 import ch.actemium.rider.servicefabric.debug.SfDebugAttacher
 import ch.actemium.rider.servicefabric.debug.SfDebugRules
 import ch.actemium.rider.servicefabric.debug.SfDeployedProcesses
@@ -11,6 +13,7 @@ import ch.actemium.rider.servicefabric.env.SfEnvironmentRules
 import ch.actemium.rider.servicefabric.publish.DeployResult
 import ch.actemium.rider.servicefabric.publish.SfPublishPipeline
 import ch.actemium.rider.servicefabric.settings.SfSettings
+import ch.actemium.rider.servicefabric.versions.SfVersionRules
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.RunProfile
 import com.intellij.execution.configurations.RunnerSettings
@@ -32,9 +35,16 @@ class SfRunProgramRunner : ProgramRunner<RunnerSettings> {
 
     override fun getRunnerId(): String = "ServiceFabricApplicationRunner"
 
-    override fun canRun(executorId: String, profile: RunProfile): Boolean =
-        profile is SfRunConfiguration &&
-            (executorId == DefaultRunExecutor.EXECUTOR_ID || executorId == DefaultDebugExecutor.EXECUTOR_ID)
+    override fun canRun(executorId: String, profile: RunProfile): Boolean {
+        if (profile !is SfRunConfiguration) return false
+        if (executorId != DefaultRunExecutor.EXECUTOR_ID && executorId != DefaultDebugExecutor.EXECUTOR_ID) return false
+        val sfproj = profile.projectPath
+        if (sfproj.isBlank()) return true
+        val project = profile.project
+        if (project.isDisposed) return true
+        return !SfRunGuard.getInstance(project).isRunning(sfproj) &&
+            !SfDebugSessionTracker.getInstance(project).hasAlive(sfproj)
+    }
 
     override fun execute(environment: ExecutionEnvironment) {
         val configuration = environment.runProfile as? SfRunConfiguration ?: return
@@ -63,7 +73,7 @@ class SfRunProgramRunner : ProgramRunner<RunnerSettings> {
         val sfproj = configuration.projectPath
         val profileFile = configuration.profileFile()
         val onDeployed: ((DeployResult) -> Unit)? = if (debug) {
-            { result -> if (result == DeployResult.Success) attachAll(project, profileFile, profileXml) }
+            { result -> if (result == DeployResult.Success) attachAll(project, sfproj, profileFile, profileXml) }
         } else {
             null
         }
@@ -71,7 +81,7 @@ class SfRunProgramRunner : ProgramRunner<RunnerSettings> {
     }
 
     /** Pooled thread, after a successful deploy. */
-    private fun attachAll(project: Project, profileFile: Path?, profileXml: String?) {
+    private fun attachAll(project: Project, sfproj: String, profileFile: Path?, profileXml: String?) {
         val parametersPath = SfDebugRules.applicationParameterFile(profileXml)
         val appName = try {
             parametersPath?.let { profileFile?.parent?.resolve(it)?.normalize() }
@@ -89,7 +99,8 @@ class SfRunProgramRunner : ProgramRunner<RunnerSettings> {
         val args = SfDebugRules.pidArgs(
             SfSettings.getInstance().executionPolicyBypass, appName, "${target.host}:${target.port}",
         )
-        val packages = SfDeployedProcesses().query(args)
+        val expected = expectedPairs(sfproj)
+        val packages = SfDeployedProcesses().query(args, expected)
         val started = packages.filter { it.processId > 0 }.distinctBy { it.processId }
         if (started.isEmpty()) {
             notify(project, SfBundle.message("debug.error.noProcess", appName), NotificationType.WARNING)
@@ -107,16 +118,34 @@ class SfRunProgramRunner : ProgramRunner<RunnerSettings> {
             }
             if (error == null) attached += label(p) else failed += "${label(p)}: $error"
         }
-        val summary = SfDebugRules.summarize(attached, failed, packages)
+        val tracker = SfDebugSessionTracker.getInstance(project)
+        attacher.sessions.forEach { tracker.register(sfproj, it) }
+        val summary = SfDebugRules.summarize(attached, failed, packages, expected)
         val lines = buildList {
             add(SfBundle.message("debug.attached", summary.attached.size, summary.attached.joinToString(", ")))
             if (summary.failed.isNotEmpty()) add(SfBundle.message("debug.failed", summary.failed.joinToString("<br>")))
-            if (summary.missing > 0) add(SfBundle.message("debug.missing", summary.missing))
+            if (summary.missing.isNotEmpty()) {
+                add(SfBundle.message("debug.missing", summary.missing.size, summary.missing.joinToString(", ")))
+            }
         }
         notify(
             project, lines.joinToString("<br>"),
             if (summary.isWarning) NotificationType.WARNING else NotificationType.INFORMATION,
         )
+    }
+
+    private fun expectedPairs(sfproj: String): List<ExpectedCodePackage>? = try {
+        val app = SfVersionRules.load(Path.of(sfproj).toAbsolutePath()) { p ->
+            try {
+                if (Files.isRegularFile(p)) Files.readString(p) else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+        SfDebugRules.expectedPairs(app)
+    } catch (e: Exception) {
+        LOG.info("Expected code packages unknown", e)
+        null
     }
 
     private fun label(p: DeployedCodePackage): String = p.executable.ifEmpty { "PID ${p.processId}" }

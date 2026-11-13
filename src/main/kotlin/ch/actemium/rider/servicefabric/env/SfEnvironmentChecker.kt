@@ -39,7 +39,7 @@ class SfEnvironmentProbes(
             sdkInstallPath = ::readSdkInstallPath,
             runProcess = { args, timeout ->
                 val out = ExecUtil.execAndGetOutput(GeneralCommandLine(args), timeout)
-                ProbeOutput(out.exitCode, out.stdout, out.isTimeout)
+                ProbeOutput(out.exitCode, out.stdout, out.isTimeout, out.stderr)
             },
             queryFabricHostSvc = {
                 val out = ExecUtil.execAndGetOutput(GeneralCommandLine("sc.exe", "query", "FabricHostSvc"), 10_000)

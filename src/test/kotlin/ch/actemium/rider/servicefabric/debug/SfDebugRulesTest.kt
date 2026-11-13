@@ -1,5 +1,8 @@
 package ch.actemium.rider.servicefabric.debug
 
+import ch.actemium.rider.servicefabric.versions.ApplicationVersions
+import ch.actemium.rider.servicefabric.versions.PackageVersion
+import ch.actemium.rider.servicefabric.versions.ServiceVersions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -68,10 +71,97 @@ class SfDebugRulesTest {
     fun `summary counts missing packages and flags warnings`() {
         val packages = listOf(DeployedCodePackage(1, "a.exe"), DeployedCodePackage(0, "b.exe"))
         val s = SfDebugRules.summarize(listOf("a.exe"), emptyList(), packages)
-        assertEquals(1, s.missing)
+        assertEquals(listOf("b.exe"), s.missing)
         assertTrue(s.isWarning)
         assertFalse(SfDebugRules.summarize(listOf("a.exe"), emptyList(), packages.take(1)).isWarning)
         assertTrue(SfDebugRules.summarize(listOf("a.exe"), listOf("c.exe: err"), packages.take(1)).isWarning)
+    }
+
+    private val expected = listOf(
+        ExpectedCodePackage("CacheActorPkg", "Code"),
+        ExpectedCodePackage("ApiPkg", "Code"),
+        ExpectedCodePackage("SvcPkg", "Code"),
+    )
+
+    private fun pkg(pid: Int, svc: String) = DeployedCodePackage(pid, "$svc.exe", svc, "Code")
+
+    @Test
+    fun `pid lines carry service manifest and code package names`() {
+        assertEquals(
+            listOf(DeployedCodePackage(7, "a.exe", "ApiPkg", "Code")),
+            SfDebugRules.parsePids("SFPID|7|C:\\x\\a.exe|ApiPkg|Code\r\n"),
+        )
+        assertTrue(SfDebugRules.pidScript("fabric:/a", "localhost:19000").contains("\$p.CodePackageName"))
+    }
+
+    @Test
+    fun `expected set drives retry and missing`() {
+        val one = listOf(pkg(1, "CacheActorPkg"))
+        val all = expected.mapIndexed { i, e -> pkg(i + 1, e.serviceManifest) }
+        assertTrue(SfDebugRules.shouldRetry(emptyList(), expected, 0))
+        assertTrue(SfDebugRules.shouldRetry(one, expected, 2_000))
+        assertFalse(SfDebugRules.shouldRetry(all, expected, 4_000))
+        assertFalse(SfDebugRules.shouldRetry(one, expected, 30_000))
+        val two = all.take(2) + pkg(0, "SvcPkg")
+        assertEquals(listOf(ExpectedCodePackage("SvcPkg", "Code")), SfDebugRules.missing(two, expected))
+        val s = SfDebugRules.summarize(listOf("a", "b"), emptyList(), two, expected)
+        assertEquals(listOf("SvcPkg/Code"), s.missing)
+        assertTrue(s.isWarning)
+    }
+
+    @Test
+    fun `multi node pair counts once started on any node`() {
+        val packages = listOf(pkg(0, "ApiPkg"), pkg(5, "ApiPkg"), pkg(6, "ApiPkg"))
+        assertTrue(SfDebugRules.missing(packages, listOf(ExpectedCodePackage("ApiPkg", "Code"))).isEmpty())
+    }
+
+    @Test
+    fun `expected pairs come from code packages, unknown when a manifest is unreadable`() {
+        fun svc(name: String, file: java.nio.file.Path?) = ServiceVersions(
+            name, "1.0", file, file?.let { "1.0" },
+            listOf(PackageVersion("CodePackage", "Code", "1.0"), PackageVersion("ConfigPackage", "Config", "1.0")),
+        )
+        val p = java.nio.file.Path.of("x")
+        val app = ApplicationVersions(p, "T", "1.0", listOf(svc("A", p), svc("B", p)))
+        assertEquals(
+            listOf(ExpectedCodePackage("A", "Code"), ExpectedCodePackage("B", "Code")),
+            SfDebugRules.expectedPairs(app),
+        )
+        assertNull(SfDebugRules.expectedPairs(app.copy(services = listOf(svc("A", p), svc("B", null)))))
+        assertNull(SfDebugRules.expectedPairs(null))
+    }
+
+    @Test
+    fun `failed query output is still parsed`() {
+        var calls = 0
+        val stdout = "SFPID|1|a.exe|CacheActorPkg|Code\nSFPID|2|b.exe|ApiPkg|Code\nSFPID|3|c.exe|SvcPkg|Code"
+        val query = SfDeployedProcesses(
+            runProcess = { _, _ -> calls++; ch.actemium.rider.servicefabric.env.ProbeOutput(1, stdout, false, "node failed") },
+            sleep = {},
+            now = { 0L },
+        )
+        assertEquals(3, query.query(emptyList(), expected).count { it.processId > 0 })
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun `staggered start retries through failure until all expected started`() {
+        var calls = 0
+        var clock = 0L
+        val outputs = listOf(
+            ch.actemium.rider.servicefabric.env.ProbeOutput(1, "", false, "boom"),
+            ch.actemium.rider.servicefabric.env.ProbeOutput(0, "SFPID|1|a.exe|CacheActorPkg|Code", false),
+            ch.actemium.rider.servicefabric.env.ProbeOutput(
+                0, "SFPID|1|a.exe|CacheActorPkg|Code\nSFPID|2|b.exe|ApiPkg|Code\nSFPID|3|c.exe|SvcPkg|Code", false,
+            ),
+        )
+        val query = SfDeployedProcesses(
+            runProcess = { _, _ -> outputs[calls++] },
+            sleep = { clock += it },
+            now = { clock },
+        )
+        assertEquals(3, query.query(emptyList(), expected).count { it.processId > 0 })
+        assertEquals(3, calls)
     }
 
     @Test

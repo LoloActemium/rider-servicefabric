@@ -72,7 +72,7 @@ class SfDebugAttacher(private val project: Project) {
             override fun processStarted(debugProcess: XDebugProcess) {
                 val session = debugProcess.session ?: return
                 if (session in snapshot) return
-                take(session, pidOf(session))
+                take(session, pidOfProcess(debugProcess))
             }
         })
         AppExecutorUtil.getAppScheduledExecutorService()
@@ -101,7 +101,16 @@ class SfDebugAttacher(private val project: Project) {
 
     /** Debuggee PID when the debug process exposes one (no platform API; best effort by reflection). */
     private fun pidOf(session: XDebugSession): Int? {
-        val process = session.debugProcess
+        // The session may not be initialized yet (getDebugProcess throws until then).
+        val process = try {
+            session.debugProcess
+        } catch (_: RuntimeException) {
+            return null
+        }
+        return pidOfProcess(process)
+    }
+
+    private fun pidOfProcess(process: Any): Int? {
         for (name in PID_GETTERS) {
             try {
                 val value = process.javaClass.getMethod(name).invoke(process)

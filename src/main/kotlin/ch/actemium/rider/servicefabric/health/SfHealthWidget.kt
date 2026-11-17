@@ -139,6 +139,12 @@ class SfHealthWidget(private val project: Project) : CustomStatusBarWidget {
 
         private fun dot(color: Color): Icon = ColorIcon(JBUI.scale(10), color)
 
+        // RowIcon aligns to the top by default: center the 10 px dot on the 16 px spinner like the other dots.
+        private fun startingIcon(): Icon = RowIcon(2, com.intellij.ui.icons.RowIcon.Alignment.CENTER).apply {
+            setIcon(dot(ORANGE), 0)
+            setIcon(AnimatedIcon.Default.INSTANCE, 1)
+        }
+
         fun healthColor(h: SfHealth): Color = when (h) {
             SfHealth.OK -> GREEN
             SfHealth.WARNING -> YELLOW
@@ -154,7 +160,7 @@ class SfHealthWidget(private val project: Project) : CustomStatusBarWidget {
 
         fun appIcon(d: AppDisplay): Icon = when (d) {
             AppDisplay.IN_PROGRESS -> AnimatedIcon.Default.INSTANCE
-            AppDisplay.STARTING -> RowIcon(dot(ORANGE), AnimatedIcon.Default.INSTANCE)
+            AppDisplay.STARTING -> startingIcon()
             AppDisplay.OK -> dot(GREEN)
             AppDisplay.WARNING -> dot(YELLOW)
             AppDisplay.ERROR -> dot(RED)

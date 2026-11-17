@@ -31,11 +31,29 @@ class SfClusterServiceController {
 
     val isBusy: Boolean get() = busy.get()
 
-    /** Service state, refreshed at most every [SfClusterServiceRules.CACHE_MS]. Blocking; not for the EDT. */
+    private val refreshing = AtomicBoolean(false)
+
+    /**
+     * Cached service state, never blocking: when older than [SfClusterServiceRules.CACHE_MS], one asynchronous
+     * refresh is scheduled and the cached value (UNKNOWN before the first refresh) is returned.
+     */
     fun state(): HostServiceState {
         val now = System.currentTimeMillis()
-        if (now - cachedAt < SfClusterServiceRules.CACHE_MS) return cached
-        return queryNow()
+        if (now - cachedAt >= SfClusterServiceRules.CACHE_MS && refreshing.compareAndSet(false, true)) {
+            try {
+                ApplicationManager.getApplication().executeOnPooledThread {
+                    try {
+                        queryNow()
+                    } finally {
+                        refreshing.set(false)
+                    }
+                }
+            } catch (e: Throwable) {
+                refreshing.set(false)
+                LOG.debug(e)
+            }
+        }
+        return cached
     }
 
     private fun queryNow(): HostServiceState {
@@ -85,11 +103,19 @@ class SfClusterServiceController {
                 notify(project, SfBundle.message(it.key), NotificationType.WARNING)
                 return
             }
-            var outcome = SfClusterServiceRules.directOutcome(run(SfClusterServiceRules.directCommand(op), 30_000))
+            val direct = run(SfClusterServiceRules.directCommand(op), 30_000)
+            LOG.info("sc.exe ${op.verb}: exit ${direct.exitCode}, timedOut=${direct.timedOut}")
+            var outcome = SfClusterServiceRules.directOutcome(direct)
             if (outcome == CommandOutcome.AccessDenied) {
                 LOG.info("sc.exe ${op.verb} denied; elevating through UAC")
-                outcome = SfClusterServiceRules.elevatedOutcome(run(SfClusterServiceRules.elevatedCommand(op), 300_000))
+                val elevated = run(SfClusterServiceRules.elevatedCommand(op), 300_000)
+                LOG.info(
+                    "Elevated sc.exe ${op.verb}: exit ${elevated.exitCode}, timedOut=${elevated.timedOut}, " +
+                        "stderr=${elevated.stderr.trim()}",
+                )
+                outcome = SfClusterServiceRules.elevatedOutcome(elevated)
             }
+            LOG.info("Local cluster ${op.verb}: outcome $outcome")
             when (outcome) {
                 CommandOutcome.Cancelled -> {
                     notify(project, SfBundle.message(key(op, "cancelled")), NotificationType.INFORMATION)
@@ -120,6 +146,7 @@ class SfClusterServiceController {
                 op.target, ::queryNow, SfClusterServiceRules.WAIT_TIMEOUT_MS,
                 System::currentTimeMillis, Thread::sleep, indicator::isCanceled,
             )
+            LOG.info("Local cluster ${op.verb}: wait result $result")
             val target = SfBundle.message(SfClusterServiceRules.stateKey(op.target))
             when (result) {
                 WaitResult.Reached -> notify(project, SfBundle.message(key(op, "done")), NotificationType.INFORMATION)
@@ -149,13 +176,14 @@ class SfClusterServiceController {
     }
 
     private fun notify(project: Project, content: String, type: NotificationType) {
+        LOG.info("Local cluster notification ($type, projectDisposed=${project.isDisposed}): $content")
         try {
             if (project.isDisposed) return
             NotificationGroupManager.getInstance().getNotificationGroup(SfPackageRunner.NOTIFICATION_GROUP)
                 .createNotification(content, type)
                 .notify(project)
         } catch (e: Exception) {
-            LOG.debug(e)
+            LOG.info("Local cluster notification failed", e)
         }
     }
 

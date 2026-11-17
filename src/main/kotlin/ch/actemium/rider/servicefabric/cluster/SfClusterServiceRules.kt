@@ -82,14 +82,17 @@ object SfClusterServiceRules {
     fun directCommand(op: ClusterOperation): List<String> = listOf("sc.exe", op.verb, SERVICE)
 
     /**
-     * `sc.exe` elevated through UAC; exits with sc's exit code, or 1223 when UAC is cancelled.
+     * `sc.exe` elevated through UAC via `Process.Start` (verb runas); exits with sc's exit code, or 1223 when
+     * UAC is cancelled (Win32Exception; `Start-Process` loses the native error code).
      */
     fun elevatedCommand(op: ClusterOperation): List<String> = listOf(
         "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-        "try { \$p = Start-Process sc.exe -ArgumentList '${op.verb}','$SERVICE' -Verb RunAs -Wait " +
-            "-WindowStyle Hidden -PassThru -ErrorAction Stop; exit \$p.ExitCode } " +
-            "catch { \$e = \$_.Exception; while (\$e) { if (\$e.NativeErrorCode -eq $ERROR_CANCELLED) { exit $ERROR_CANCELLED }; " +
-            "\$e = \$e.InnerException }; [Console]::Error.WriteLine(\$_.Exception.Message); exit 1 }",
+        "\$psi = New-Object System.Diagnostics.ProcessStartInfo 'sc.exe'; \$psi.Arguments = '${op.verb} $SERVICE'; " +
+            "\$psi.Verb = 'runas'; \$psi.UseShellExecute = \$true; \$psi.WindowStyle = 'Hidden'; " +
+            "try { \$p = [System.Diagnostics.Process]::Start(\$psi); \$p.WaitForExit(); exit \$p.ExitCode } " +
+            "catch [System.ComponentModel.Win32Exception] { if (\$_.Exception.NativeErrorCode -eq $ERROR_CANCELLED) " +
+            "{ exit $ERROR_CANCELLED }; [Console]::Error.WriteLine(\$_.Exception.Message); exit 1 } " +
+            "catch { [Console]::Error.WriteLine(\$_.Exception.Message); exit 1 }",
     )
 
     fun isAccessDenied(output: ProbeOutput): Boolean = !output.timedOut && output.exitCode == ERROR_ACCESS_DENIED

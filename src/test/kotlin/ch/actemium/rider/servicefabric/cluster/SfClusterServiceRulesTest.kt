@@ -46,7 +46,11 @@ class SfClusterServiceRulesTest {
         assertEquals(listOf("sc.exe", "start", "FabricHostSvc"), SfClusterServiceRules.directCommand(ClusterOperation.START))
         val elevated = SfClusterServiceRules.elevatedCommand(ClusterOperation.STOP)
         assertEquals("powershell.exe", elevated.first())
-        assertTrue(elevated.last().contains("Start-Process sc.exe -ArgumentList 'stop','FabricHostSvc' -Verb RunAs -Wait"))
+        val script = elevated.last()
+        assertTrue(script.contains("\$psi.Arguments = 'stop FabricHostSvc'"))
+        assertTrue(script.contains("\$psi.Verb = 'runas'"))
+        assertTrue(script.contains("[System.Diagnostics.Process]::Start(\$psi)"))
+        assertTrue(script.contains("catch [System.ComponentModel.Win32Exception] { if (\$_.Exception.NativeErrorCode -eq 1223) { exit 1223 }"))
     }
 
     @Test

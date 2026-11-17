@@ -8,8 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.18] - 2026-11-17
+
+### Added
+
 - **Start Local Cluster** / **Stop Local Cluster** in the Service Fabric menu (starts or stops the `FabricHostSvc`
-  service, through UAC when needed; Stop asks for confirmation and stops Service Fabric debug sessions first).
+  service, through UAC when needed; Stop asks for confirmation and also stops the Service Fabric debug sessions).
 
 ### Changed
 
@@ -135,7 +145,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - First version: Service Fabric project detection and context menu, settings, Package and Publish actions,
   environment diagnostics with Re-check, Service Fabric icons.
 
-[Unreleased]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.17...HEAD
+[Unreleased]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.14...v0.1.15

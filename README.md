@@ -36,6 +36,7 @@ local cluster, hit **Debug** and land on your breakpoints in every service.
 | 🧠 **Manifest IntelliSense** | Completion and validation in `ApplicationManifest.xml`, `ServiceManifest.xml`, `Settings.xml` and parameter files, from the SDK schemas. |
 | 🚦 **Live cluster health** | Status bar widget with the local cluster state and each application's health — same colors as Service Fabric Explorer, an orange *starting* state, and a notification when your app is really ready. |
 | 🩺 **Environment check** | Detects the SDK, the PowerShell module and the local cluster, and tells you what is missing. |
+| ⏯️ **Start / Stop local cluster** | Start or stop the local development cluster from the Service Fabric menu — a UAC prompt only when needed. |
 
 ## 📥 Installation
 

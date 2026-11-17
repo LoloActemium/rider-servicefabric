@@ -85,7 +85,7 @@ val generateUpdatePlugins = tasks.register("generateUpdatePlugins") {
     outputs.file(output)
     doLast {
         val zip = archive.get().asFile
-        val base = baseUrl.get().trimEnd('/')
+        val base = baseUrl.get().trimEnd('/').replace("{version}", pluginVersion)
         val dir = repositoryDir.get()
         val url = when {
             base.isNotEmpty() -> "$base/${zip.name}"
@@ -120,6 +120,27 @@ tasks.register<Copy>("publishToRepository") {
     from(tasks.buildPlugin.flatMap { it.archiveFile })
     from(layout.buildDirectory.file("distributions/updatePlugins.xml"))
     into(target.map { dir -> require(dir.isNotBlank()) { "Set -PpluginRepositoryDir=<folder>" }; dir })
+}
+
+tasks.register<Exec>("githubRelease") {
+    group = "distribution"
+    description = "Creates the GitHub release v<pluginVersion> with the plugin zip and updatePlugins.xml (requires gh, logged in)."
+    dependsOn(generateUpdatePlugins)
+    val tag = "v${project.version}"
+    val zip = tasks.buildPlugin.flatMap { it.archiveFile }
+    val updates = layout.buildDirectory.file("distributions/updatePlugins.xml")
+    inputs.file(zip)
+    inputs.file(updates)
+    executable = "gh"
+    argumentProviders.add(CommandLineArgumentProvider {
+        listOf(
+            "release", "create", tag,
+            zip.get().asFile.absolutePath,
+            updates.get().asFile.absolutePath,
+            "--title", tag,
+            "--notes", "Azure Service Fabric plugin for Rider $tag.",
+        )
+    })
 }
 
 tasks.register("bumpVersion") {

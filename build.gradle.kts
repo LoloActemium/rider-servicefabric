@@ -1,10 +1,29 @@
+import org.jetbrains.changelog.Changelog
+
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.3.0"
     id("org.jetbrains.intellij.platform") version "2.20.0"
+    id("org.jetbrains.changelog") version "2.4.0"
 }
 
 group = providers.gradleProperty("pluginGroup").get()
 version = providers.gradleProperty("pluginVersion").get()
+
+changelog {
+    groups.set(listOf("Added", "Changed", "Fixed", "Removed"))
+    repositoryUrl.set("https://github.com/LoloActemium/rider-servicefabric")
+}
+
+/** Changelog section of the current version, or [Unreleased] when the version has not been patched in yet. */
+fun changelogSection(type: Changelog.OutputType): String = with(changelog) {
+    renderItem(
+        (getOrNull(project.version.toString()) ?: getUnreleased()).withHeader(false).withEmptySections(false),
+        type,
+    )
+}
+
+val changeNotesHtml = providers.provider { changelogSection(Changelog.OutputType.HTML) }
+val changeNotesMarkdown = providers.provider { changelogSection(Changelog.OutputType.MARKDOWN) }
 
 kotlin {
     jvmToolchain(25)
@@ -45,6 +64,7 @@ intellijPlatform {
         id = "ch.actemium.rider.servicefabric"
         name = "Azure Service Fabric"
         version = project.version.toString()
+        changeNotes = changeNotesHtml
         ideaVersion {
             sinceBuild = "263"
             untilBuild = "263.*"
@@ -78,10 +98,12 @@ val generateUpdatePlugins = tasks.register("generateUpdatePlugins") {
     val baseUrl = pluginRepositoryUrl
     val repositoryDir = pluginRepositoryDir
     val output = layout.buildDirectory.file("distributions/updatePlugins.xml")
+    val notes = changeNotesHtml
     inputs.file(archive)
     inputs.property("version", pluginVersion)
     inputs.property("baseUrl", baseUrl)
     inputs.property("repositoryDir", repositoryDir)
+    inputs.property("changeNotes", notes)
     outputs.file(output)
     doLast {
         val zip = archive.get().asFile
@@ -101,6 +123,7 @@ val generateUpdatePlugins = tasks.register("generateUpdatePlugins") {
             |    <name>Azure Service Fabric</name>
             |    <vendor>Actemium</vendor>
             |    <description>Package and publish Azure Service Fabric applications from Rider.</description>
+            |    <change-notes><![CDATA[${notes.get()}]]></change-notes>
             |  </plugin>
             |</plugins>
             |""".trimMargin(),
@@ -129,6 +152,7 @@ tasks.register<Exec>("githubRelease") {
     val tag = "v${project.version}"
     val zip = tasks.buildPlugin.flatMap { it.archiveFile }
     val updates = layout.buildDirectory.file("distributions/updatePlugins.xml")
+    val notes = changeNotesMarkdown
     inputs.file(zip)
     inputs.file(updates)
     executable = "gh"
@@ -138,7 +162,7 @@ tasks.register<Exec>("githubRelease") {
             zip.get().asFile.absolutePath,
             updates.get().asFile.absolutePath,
             "--title", tag,
-            "--notes", "Azure Service Fabric plugin for Rider $tag.",
+            "--notes", notes.get().ifBlank { "Azure Service Fabric plugin for Rider $tag." },
         )
     })
 }

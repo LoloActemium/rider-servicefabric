@@ -85,11 +85,16 @@ $jbr = "-Porg.gradle.java.installations.paths=$env:LOCALAPPDATA\Programs\Rider\j
 Releases are published to **GitHub Releases** from a developer machine (requires the GitHub CLI, `gh auth login`).
 
 ```powershell
-.\gradlew.bat bumpVersion                                   # 0.1.15 -> 0.1.16, removes old zips
+# 1. Describe the changes under "## [Unreleased]" in CHANGELOG.md as you go.
+.\gradlew.bat bumpVersion                                   # 0.1.16 -> 0.1.17, removes old zips
+.\gradlew.bat patchChangelog                                # [Unreleased] -> [0.1.17] - <date>
 .\gradlew.bat test buildPlugin verifyPluginStructure $jbr
-git commit -am "chore: release 0.1.16"; git push
-.\gradlew.bat githubRelease $jbr                            # release v0.1.16 with the zip + updatePlugins.xml
+git commit -am "chore: release 0.1.17"; git push
+.\gradlew.bat githubRelease $jbr                            # release v0.1.17 with the zip + updatePlugins.xml
 ```
+
+The changelog section of the version feeds Rider's **What's New** (`<change-notes>` in `plugin.xml` and in
+`updatePlugins.xml`) and the GitHub release notes (see [`CHANGELOG.md`](CHANGELOG.md)).
 
 `updatePlugins.xml` points to `<pluginRepositoryUrl>/<zip>`; `{version}` in `pluginRepositoryUrl`
 (`gradle.properties`) is replaced by the plugin version. A folder-based repository is also supported:

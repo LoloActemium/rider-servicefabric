@@ -6,3 +6,4 @@
 .kotlin/
 *.iml
 _bmad/render/
+_bmad-output/

@@ -9,7 +9,9 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
 ![Windows](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white)
 
-<img src="docs/images/status-bar-starting.png" alt="Status bar: local cluster healthy, application starting" />
+<img src="docs/images/rider-sf-waiting-for-readiness.png" alt="Publish succeeded, local cluster healthy, application starting (orange)" />
+&nbsp;&nbsp;
+<img src="docs/images/rider-sf-published.png" alt="Local cluster and application healthy (green)" />
 
 </div>
 
@@ -18,6 +20,8 @@
 Visual Studio has always shipped first-class tooling for Azure Service Fabric. Rider did not.
 This plugin brings the everyday Service Fabric workflow to Rider: right-click your `.sfproj`, publish to your
 local cluster, hit **Debug** and land on your breakpoints in every service.
+
+![Service Fabric menu in Rider's Solution Explorer](docs/images/rider-sf-full-app.png)
 
 ## ✨ Features
 

@@ -1,6 +1,7 @@
 package ch.actemium.rider.servicefabric.actions
 
 import ch.actemium.rider.servicefabric.SfBundle
+import ch.actemium.rider.servicefabric.SfIcons
 import ch.actemium.rider.servicefabric.build.SfPackageRunner
 import ch.actemium.rider.servicefabric.detection.MenuVisibility
 import ch.actemium.rider.servicefabric.detection.SfProjectDetector
@@ -24,6 +25,7 @@ class SfCreateRunConfigurationAction : AnAction(), DumbAware {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(e: AnActionEvent) {
+        e.presentation.icon = SfIcons.ServiceFabric
         val visibility = SfProjectActionGroup.computeVisibility(e)
         e.presentation.isVisible = visibility != MenuVisibility.HIDDEN
         val exists = visibility == MenuVisibility.ENABLED && e.project?.let { project ->

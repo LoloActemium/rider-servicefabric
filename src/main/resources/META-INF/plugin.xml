@@ -48,18 +48,24 @@
                popup="true">
             <add-to-group group-id="SolutionExplorerPopupMenu" anchor="after" relative-to-action="AdvancedBuildActions"/>
             <action id="ServiceFabric.Package"
-                    class="ch.actemium.rider.servicefabric.actions.SfPackageAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfPackageAction"
+                    icon="AllIcons.Actions.Compile"/>
             <action id="ServiceFabric.Publish"
-                    class="ch.actemium.rider.servicefabric.actions.SfPublishAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfPublishAction"
+                    icon="AllIcons.Nodes.Deploy"/>
             <action id="ServiceFabric.Clean"
-                    class="ch.actemium.rider.servicefabric.actions.SfCleanAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfCleanAction"
+                    icon="AllIcons.Actions.GC"/>
             <action id="ServiceFabric.EditVersions"
-                    class="ch.actemium.rider.servicefabric.actions.SfEditVersionsAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfEditVersionsAction"
+                    icon="AllIcons.Nodes.Tag"/>
             <action id="ServiceFabric.CreateRunConfiguration"
-                    class="ch.actemium.rider.servicefabric.actions.SfCreateRunConfigurationAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfCreateRunConfigurationAction"
+                    icon="/icons/serviceFabric.svg"/>
             <separator/>
             <action id="ServiceFabric.RecheckEnvironment"
-                    class="ch.actemium.rider.servicefabric.actions.SfRecheckEnvironmentAction"/>
+                    class="ch.actemium.rider.servicefabric.actions.SfRecheckEnvironmentAction"
+                    icon="AllIcons.Actions.Refresh"/>
         </group>
     </actions>
 </idea-plugin>

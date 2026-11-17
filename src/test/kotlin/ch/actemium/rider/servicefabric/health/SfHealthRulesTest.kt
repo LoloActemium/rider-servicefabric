@@ -279,4 +279,256 @@ class SfHealthRulesTest {
         assertEquals("health.app.notDeployed(fabric:/a)", lines[1])
         assertNull(snap.apps[0].reason)
     }
+
+    // --- Story 18: infrastructure cluster health and Starting state ---
+
+    private fun cluster(nodes: String, apps: String) =
+        """{"AggregatedHealthState":"Error","NodeHealthStates":[$nodes],"ApplicationHealthStates":[$apps]}"""
+
+    private fun node(h: String) = """{"Name":"_Node_0","AggregatedHealthState":"$h"}"""
+    private fun appState(n: String, h: String) = """{"Name":"$n","AggregatedHealthState":"$h"}"""
+    private val solution = listOf("fabric:/etavis.Warehouse")
+
+    @Test
+    fun `cluster health ignores solution apps`() {
+        val json = cluster(node("Ok"), appState("fabric:/System", "Ok") + "," + appState("fabric:/etavis.Warehouse", "Error"))
+        val v = SfHealthRules.clusterView(ApiOutcome.Response(200, json), null, solution)
+        assertEquals(SfHealth.OK, v.health)
+        assertTrue(v.otherUnhealthy.isEmpty())
+        val real = SfHealthRules.clusterView(ApiOutcome.Response(200, resource("cluster-health.json")), null, solution)
+        assertEquals(ClusterView(ClusterState.UP, SfHealth.OK), real)
+    }
+
+    @Test
+    fun `cluster red on unhealthy node or system`() {
+        assertEquals(SfHealth.ERROR, SfHealthRules.parseInfraHealth(cluster(node("Error"), appState("fabric:/System", "Ok")), solution).first)
+        assertEquals(SfHealth.WARNING, SfHealthRules.parseInfraHealth(cluster(node("Ok"), appState("fabric:/System", "Warning")), solution).first)
+        assertEquals(SfHealth.ERROR, SfHealthRules.parseInfraHealth(cluster(node("Error"), ""), solution).first)
+        assertEquals(SfHealth.OK, SfHealthRules.parseInfraHealth(cluster(node("Ok"), ""), solution).first)
+        assertEquals(SfHealth.UNKNOWN, SfHealthRules.parseInfraHealth(cluster("", ""), solution).first)
+        assertEquals(SfHealth.UNKNOWN, SfHealthRules.parseInfraHealth("{}", solution).first)
+    }
+
+    @Test
+    fun `other unhealthy apps listed in tooltip`() {
+        val json = cluster(node("Ok"), appState("fabric:/System", "Ok") + "," + appState("fabric:/vesact.Log", "Error") +
+            "," + appState("fabric:/vesact.File", "Ok"))
+        val v = SfHealthRules.clusterView(ApiOutcome.Response(200, json), null, solution)
+        assertEquals(SfHealth.OK, v.health)
+        assertEquals(listOf("fabric:/vesact.Log" to SfHealth.ERROR), v.otherUnhealthy)
+        val lines = SfHealthRules.tooltipLines(HealthSnapshot(v, emptyList()), msg)
+        assertEquals("  health.cluster.otherApps(1,vesact.Log (health.state.error))", lines[1])
+
+        val many = (1..7).joinToString(",") { appState("fabric:/x$it", "Warning") }
+        val v7 = SfHealthRules.clusterView(ApiOutcome.Response(200, cluster(node("Ok"), many)), null, solution)
+        val line = SfHealthRules.otherAppsLine(v7, msg)!!
+        assertTrue(line.startsWith("health.cluster.otherApps(7,x1 "))
+        assertTrue(line.contains("x5 (") && !line.contains("x6") && line.endsWith(", \u2026)"))
+    }
+
+    private fun fetcher(map: Map<String, ApiOutcome>): (String, Int) -> ApiOutcome = { url, _ ->
+        map.entries.firstOrNull { url.contains(it.key) }?.value ?: ApiOutcome.Failed("unexpected $url")
+    }
+
+    private fun replicas(vararg status: String) = ApiOutcome.Response(
+        200, """{"Items":[${status.joinToString(",") { """{"ServiceKind":"Stateless","ReplicaStatus":"$it"}""" }}]}""",
+    )
+
+    private fun partitions(status: String) = ApiOutcome.Response(
+        200, """{"Items":[{"PartitionInformation":{"Id":"p1"},"PartitionStatus":"$status"}]}""",
+    )
+
+    private val services1 = ApiOutcome.Response(200, """{"Items":[{"Id":"etavis.Warehouse~etavis.Warehouse.api"}]}""")
+
+    @Test
+    fun `detail urls`() {
+        assertEquals(
+            "http://localhost:19080/Services/etavis.Warehouse~etavis.Warehouse.api/\$/GetPartitions?api-version=6.0",
+            SfHealthRules.partitionsUrl("localhost", "etavis.Warehouse~etavis.Warehouse.api"),
+        )
+        assertEquals(
+            "http://localhost:19080/Applications/etavis.Warehouse/\$/GetServices?api-version=6.0",
+            SfHealthRules.servicesUrl("localhost", "fabric:/etavis.Warehouse"),
+        )
+        assertEquals(
+            "http://localhost:19080/Partitions/p1/\$/GetReplicas?api-version=6.0",
+            SfHealthRules.replicasUrl("localhost", "p1"),
+        )
+    }
+
+    @Test
+    fun `start detection on real payloads`() {
+        assertEquals(3, SfHealthRules.parseServiceIds(resource("services.json")).size)
+        assertTrue(SfHealthRules.replicasReady(resource("replicas.json")))
+        assertTrue(SfHealthRules.replicasReady(resource("replicas-stateless.json")))
+        val f = fetcher(mapOf(
+            "GetServices" to ApiOutcome.Response(200, resource("services.json")),
+            "GetPartitions" to ApiOutcome.Response(200, resource("partitions.json")),
+            "GetReplicas" to ApiOutcome.Response(200, resource("replicas.json")),
+        ))
+        assertEquals(StartDetection.READY, SfHealthRules.detectStarting("localhost", "fabric:/etavis.Warehouse", f) { 3_000L })
+    }
+
+    @Test
+    fun `start detection non ready elements, empty replicas and failures`() {
+        fun detect(p: ApiOutcome, r: ApiOutcome, expired: Boolean = false) = SfHealthRules.detectStarting(
+            "localhost", "fabric:/etavis.Warehouse",
+            fetcher(mapOf("GetServices" to services1, "GetPartitions" to p, "GetReplicas" to r)),
+        ) { if (expired) 0L else 3_000L }
+        assertEquals(StartDetection.STARTING, detect(partitions("NotReady"), replicas("Ready")))
+        assertEquals(StartDetection.STARTING, detect(partitions("Ready"), replicas("Ready", "InBuild")))
+        assertEquals(StartDetection.STARTING, detect(partitions("Ready"), replicas()))
+        assertEquals(StartDetection.READY, detect(partitions("Ready"), replicas("Ready", "Ready")))
+        assertEquals(StartDetection.FAILED, detect(partitions("Ready"), ApiOutcome.Timeout("t")))
+        assertEquals(StartDetection.FAILED, detect(partitions("Ready"), ApiOutcome.Response(500, "")))
+        assertEquals(StartDetection.FAILED, detect(partitions("Ready"), ApiOutcome.Response(200, "{bad")))
+        assertEquals(StartDetection.FAILED, detect(partitions("Ready"), replicas("Ready"), expired = true))
+        assertEquals(StartDetection.STARTING, detect(ApiOutcome.Response(200, """{"Items":[]}"""), replicas("Ready")))
+        val noServices = SfHealthRules.detectStarting(
+            "localhost", "fabric:/a", fetcher(mapOf("GetServices" to ApiOutcome.Response(200, """{"Items":[]}"""))),
+        ) { 3_000L }
+        assertEquals(StartDetection.STARTING, noServices)
+    }
+
+    @Test
+    fun `start detection passes remaining budget and skips calls under 200 ms`() {
+        val timeouts = mutableListOf<Int>()
+        var left = 2_500L
+        val f: (String, Int) -> ApiOutcome = { url, t ->
+            timeouts += t
+            left -= 2_350L
+            if (url.contains("GetServices")) services1 else partitions("Ready")
+        }
+        assertEquals(StartDetection.FAILED, SfHealthRules.detectStarting("localhost", "fabric:/a", f) { left })
+        assertEquals(listOf(2_500), timeouts)
+    }
+
+    private fun ready(health: String, version: String = "2.0") = SfHealthRules.appView(
+        "fabric:/a", up, ApiOutcome.Response(200, """{"TypeVersion":"$version","Status":"Ready","HealthState":"$health"}"""), null,
+    )
+
+    @Test
+    fun `starting display and grace masking`() {
+        val g = 120_000L
+        assertEquals(AppDisplay.STARTING, SfHealthRules.withStarting(ready("Ok"), true, 0, 1_000, g).display)
+        assertEquals(AppDisplay.STARTING, SfHealthRules.withStarting(ready("Error"), true, 0, 119_000, g).display)
+        assertEquals(AppDisplay.ERROR, SfHealthRules.withStarting(ready("Error"), true, 0, 121_000, g).display)
+        assertEquals(AppDisplay.OK, SfHealthRules.withStarting(ready("Ok"), false, 0, 1_000, g).display)
+        assertEquals(AppDisplay.WARNING, SfHealthRules.withStarting(ready("Warning"), false, null, 1_000, g).display)
+        // grace 0: orange only while Ok
+        assertEquals(AppDisplay.ERROR, SfHealthRules.withStarting(ready("Error"), true, 0, 1_000, 0).display)
+        assertEquals(AppDisplay.STARTING, SfHealthRules.withStarting(ready("Ok"), true, 0, 1_000, 0).display)
+        // in-progress statuses keep the spinner
+        val deleting = SfHealthRules.appView("n", up, app("Deleting", "Warning"), null)
+        assertEquals(AppDisplay.IN_PROGRESS, SfHealthRules.withStarting(deleting, true, 0, 1_000, g).display)
+        val line = SfHealthRules.appLines(SfHealthRules.withStarting(ready("Error"), true, 0, 1_000, g), msg)[0]
+        assertTrue(line.contains("health.state.error") && line.endsWith("(health.state.starting)"))
+    }
+
+    @Test
+    fun `detail needed only when useful`() {
+        assertFalse(SfHealthRules.needsDetail(ready("Ok"), tracked = false, armed = false, previous = ready("Ok")))
+        assertTrue(SfHealthRules.needsDetail(ready("Error"), false, false, null))
+        assertTrue(SfHealthRules.needsDetail(ready("Ok"), true, false, null))
+        assertTrue(SfHealthRules.needsDetail(ready("Ok"), false, true, null))
+        val absent = SfHealthRules.appView("fabric:/a", up, ApiOutcome.Response(404, ""), null)
+        assertTrue(SfHealthRules.needsDetail(ready("Ok"), false, false, absent))
+        val creating = SfHealthRules.appView("fabric:/a", up, app("Creating", "Ok"), null)
+        assertTrue(SfHealthRules.needsDetail(ready("Ok"), false, false, creating))
+        assertFalse(SfHealthRules.needsDetail(creating, true, true, absent))
+    }
+
+    @Test
+    fun `observed detected start sequence never red`() {
+        // 2 s polls from 09:12:34 (t=0): InBuild, Error 20..37 s, all Ready+Ok at 39 s
+        var detectedStart: Long? = null
+        for (t in 0L..44_000L step 2_000L) {
+            val health = if (t in 20_000L..37_000L) "Error" else "Ok"
+            val starting = t < 39_000L
+            if (starting) detectedStart = detectedStart ?: t else detectedStart = null
+            val d = SfHealthRules.withStarting(ready(health), starting, detectedStart, t, 120_000).display
+            assertEquals(if (starting) AppDisplay.STARTING else AppDisplay.OK, d, "t=$t")
+        }
+    }
+
+    @Test
+    fun `rider grace start until ready notification`() {
+        val a = ReadyArming()
+        val s = 30_000L
+        val g = 120_000L
+        a.arm("fabric:/a", "2.0", 0)
+        assertNull(a.riderStart(view("1.0"), 1_000, g)) // old version still running
+        val creating = SfHealthRules.appView("fabric:/a", up, app("Creating", "Ok"), null).copy(name = "fabric:/a")
+        assertNull(a.riderStart(creating, 2_000, g))
+        assertEquals(4_000L, a.riderStart(ready("Ok"), 4_000, g))
+        assertEquals(4_000L, a.riderStart(ready("Error"), 24_000, g))
+        assertFalse(a.consume(ready("Error"), 24_000, s, G))
+        assertEquals(4_000L, a.riderStart(ready("Ok"), 43_000, g))
+        assertFalse(a.consume(ready("Ok"), 43_000, s, G))
+        assertTrue(a.consume(ready("Ok"), 73_000, s, G)) // ready notification
+        assertNull(a.riderStart(ready("Ok"), 73_000, g))
+    }
+
+    @Test
+    fun `rider start ends when grace elapsed with non ok health`() {
+        val a = ReadyArming()
+        a.arm("fabric:/a", null, 0)
+        assertEquals(0L, a.riderStart(ready("Error"), 0, 120_000))
+        assertNull(a.riderStart(ready("Error"), 121_000, 120_000))
+        assertNull(a.riderStart(ready("Ok"), 122_000, 120_000))
+
+        a.arm("fabric:/a", null, 0)
+        assertEquals(0L, a.riderStart(ready("Ok"), 0, 0))
+        assertNull(a.riderStart(ready("Error"), 2_000, 0))
+
+        a.arm("fabric:/a", null, 0)
+        a.riderStart(ready("Ok"), 0, 120_000)
+        a.disarm("fabric:/a")
+        assertNull(a.riderStart(ready("Ok"), 2_000, 120_000))
+    }
+
+    @Test
+    fun `start tracker observed sequence with a failed poll mid start`() {
+        val tr = StartTracker()
+        val g = 120_000L
+        val absent = SfHealthRules.appView("fabric:/a", up, ApiOutcome.Response(404, ""), null)
+        assertEquals(AppDisplay.NOT_DEPLOYED, tr.apply(absent, null, null, -2_000, g).display)
+        for (t in 0L..44_000L step 2_000L) {
+            val health = if (t in 20_000L..37_000L) "Error" else "Ok"
+            val v = ready(health)
+            assertTrue(t >= 39_000L || tr.needsDetail(v, armed = false), "t=$t")
+            val detection = when {
+                t == 24_000L -> StartDetection.FAILED
+                t < 39_000L -> StartDetection.STARTING
+                else -> StartDetection.READY
+            }
+            val d = tr.apply(v, null, if (tr.needsDetail(v, false)) detection else null, t, g).display
+            assertEquals(if (t < 39_000L) AppDisplay.STARTING else AppDisplay.OK, d, "t=$t")
+        }
+        assertNull(tr.startOf("fabric:/a"))
+        assertFalse(tr.needsDetail(ready("Ok"), false))
+    }
+
+    @Test
+    fun `start tracker redeploy restarts the grace, cluster down and prune forget`() {
+        val tr = StartTracker()
+        val g = 120_000L
+        tr.apply(ready("Error"), null, StartDetection.STARTING, 0, g)
+        assertEquals(AppDisplay.ERROR, tr.apply(ready("Error"), null, StartDetection.STARTING, 130_000, g).display)
+        val absent = SfHealthRules.appView("fabric:/a", up, ApiOutcome.Response(404, ""), null)
+        tr.apply(absent, null, null, 140_000, g)
+        assertNull(tr.startOf("fabric:/a"))
+        assertTrue(tr.needsDetail(ready("Ok"), false))
+        assertEquals(AppDisplay.STARTING, tr.apply(ready("Error"), null, StartDetection.STARTING, 150_000, g).display)
+        assertEquals(150_000L, tr.startOf("fabric:/a"))
+
+        val down = SfHealthRules.appView("fabric:/a", ClusterView(ClusterState.STOPPED), null, null)
+        tr.apply(down, null, null, 160_000, g)
+        assertNull(tr.startOf("fabric:/a"))
+
+        tr.apply(ready("Ok"), null, StartDetection.STARTING, 170_000, g)
+        tr.prune(listOf("fabric:/other"))
+        assertNull(tr.startOf("fabric:/a"))
+        assertFalse(tr.needsDetail(ready("Ok"), false))
+    }
 }

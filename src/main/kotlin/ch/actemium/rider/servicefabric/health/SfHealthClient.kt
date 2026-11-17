@@ -9,10 +9,10 @@ import java.net.SocketTimeoutException
 /** Unsecured REST calls to the local cluster HTTP gateway; never throws. */
 class SfHealthClient {
 
-    fun get(url: String): ApiOutcome = try {
+    fun get(url: String, timeoutMs: Int = SfHealthRules.TIMEOUT_MS): ApiOutcome = try {
         HttpRequests.request(url)
-            .connectTimeout(SfHealthRules.TIMEOUT_MS)
-            .readTimeout(SfHealthRules.TIMEOUT_MS)
+            .connectTimeout(timeoutMs)
+            .readTimeout(timeoutMs)
             .throwStatusCodeException(false)
             .accept("application/json")
             .connect { request ->
@@ -24,7 +24,7 @@ class SfHealthClient {
         LOG.debug("GET $url failed", e)
         when (generateSequence<Throwable>(e) { it.cause }.firstOrNull { it is ConnectException || it is SocketTimeoutException }) {
             is ConnectException -> ApiOutcome.Refused
-            is SocketTimeoutException -> ApiOutcome.Timeout("timeout after ${SfHealthRules.TIMEOUT_MS / 1000} s")
+            is SocketTimeoutException -> ApiOutcome.Timeout("timeout after ${timeoutMs} ms")
             else -> ApiOutcome.Failed(e.message ?: e.javaClass.simpleName)
         }
     }

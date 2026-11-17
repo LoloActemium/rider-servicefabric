@@ -57,6 +57,9 @@ class SfHealthMonitor(private val project: Project) : Disposable {
 
     private val armed = ReadyArming()
 
+    /** Per-application start detection bookkeeping; only touched by the (non-overlapping) poll. */
+    private val starts = StartTracker()
+
     @Volatile
     private var fastUntil = 0L
 
@@ -160,9 +163,10 @@ class SfHealthMonitor(private val project: Project) : Disposable {
         } else {
             null
         }
-        val cluster = SfHealthRules.clusterView(clusterApi, service)
+        val cluster = SfHealthRules.clusterView(clusterApi, service, names)
         cluster.reason?.let { LOG.debug("Cluster health: ${cluster.state} ($it)") }
-        val apps = names.map { name ->
+        val armedNow = armed.armedApps(now)
+        val rawApps = names.map { name ->
             if (cluster.state != ClusterState.UP) {
                 SfHealthRules.appView(name, cluster, null, null)
             } else {
@@ -174,16 +178,33 @@ class SfHealthMonitor(private val project: Project) : Disposable {
                 }
             }
         }
-        snapshot = HealthSnapshot(cluster, apps)
         val polledAt = System.currentTimeMillis()
         val settings = SfSettings.getInstance()
         val stableMs = settings.readyStableSeconds * 1000L
+        val graceMs = settings.startupGraceSeconds * 1000L
         val maxGapMs = 2 * SfHealthRules.pollDelayMs(settings.healthPollSeconds, polledAt, fastUntil) + 3_000L
-        armed.observeMissing(apps.map { it.name }, polledAt)
-        for (view in apps) {
-            if (armed.consume(view, polledAt, stableMs, maxGapMs)) notifyReady(view.name)
-        }
+        armed.observeMissing(rawApps.map { it.name }, polledAt)
+        val ready = rawApps.filter { armed.consume(it, polledAt, stableMs, maxGapMs) }.map { it.name }.toSet()
+        val apps = rawApps.map { view -> startingView(view, view.name in armedNow, polledAt, graceMs) }
+        starts.prune(names)
+        snapshot = HealthSnapshot(cluster, apps)
+        ready.forEach(::notifyReady)
         listeners.forEach { it() }
+    }
+
+    /** Rider grace start + start detection → display with the Starting state. */
+    private fun startingView(view: AppView, isArmed: Boolean, nowMs: Long, graceMs: Long): AppView {
+        val name = view.name
+        val riderStart = if (view.display == AppDisplay.CLUSTER_DOWN) null else armed.riderStart(view, nowMs, graceMs)
+        val detection = if (starts.needsDetail(view, isArmed)) {
+            val deadline = System.currentTimeMillis() + SfHealthRules.TIMEOUT_MS
+            SfHealthRules.detectStarting(host, name, client::get) { deadline - System.currentTimeMillis() }.also {
+                if (it == StartDetection.FAILED) LOG.debug("Application $name: start detection failed or exceeded its budget")
+            }
+        } else {
+            null
+        }
+        return starts.apply(view, riderStart, detection, nowMs, graceMs)
     }
 
     private fun updateWidgetVisibility() {

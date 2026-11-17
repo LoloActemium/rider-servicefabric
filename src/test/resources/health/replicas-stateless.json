@@ -1,0 +1,1 @@
+{"ContinuationToken":"","Items":[{"ServiceKind":"Stateless","InstanceId":"134393767540000001","ReplicaStatus":"Ready","HealthState":"Ok","Address":"{\"Endpoints\":{\"ServiceEndpoint\":\"http:\/\/localhost:8080\"}}","NodeName":"_Node_0","LastInBuildDurationInSeconds":"12"}]}

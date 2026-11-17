@@ -34,6 +34,11 @@ class SfConfigurable : BoundConfigurable(SfBundle.message("settings.displayName"
                     .bindIntText(settings::readyStableSeconds)
                     .comment(SfBundle.message("settings.readyStable.comment"))
             }
+            row(SfBundle.message("settings.startupGrace.label")) {
+                intTextField(SfSettings.MIN_STARTUP_GRACE_SECONDS..SfSettings.MAX_STARTUP_GRACE_SECONDS)
+                    .bindIntText(settings::startupGraceSeconds)
+                    .comment(SfBundle.message("settings.startupGrace.comment"))
+            }
         }
     }
 

@@ -13,5 +13,6 @@ class SfSettingsStateTest {
         assertTrue(state.autoCreateRunConfigurations)
         assertTrue(state.removeFromClusterOnRiderClean)
         org.junit.jupiter.api.Assertions.assertEquals(30, state.readyStableSeconds)
+        org.junit.jupiter.api.Assertions.assertEquals(120, state.startupGraceSeconds)
     }
 }

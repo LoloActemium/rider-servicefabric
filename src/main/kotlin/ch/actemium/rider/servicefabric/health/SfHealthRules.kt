@@ -20,14 +20,23 @@ sealed class ApiOutcome {
     data class Failed(val reason: String) : ApiOutcome()
 }
 
-data class ClusterView(val state: ClusterState, val health: SfHealth = SfHealth.UNKNOWN, val reason: String? = null)
+/** [health] covers the infrastructure only (nodes + `fabric:/System`); [otherUnhealthy] = unhealthy apps outside the solution. */
+data class ClusterView(
+    val state: ClusterState,
+    val health: SfHealth = SfHealth.UNKNOWN,
+    val reason: String? = null,
+    val otherUnhealthy: List<Pair<String, SfHealth>> = emptyList(),
+)
+
+/** Result of the services/partitions/replicas walk of a Ready application. */
+enum class StartDetection { STARTING, READY, FAILED }
 
 /** `GET /Applications/{id}` payload. */
 data class AppInfo(val status: String, val health: SfHealth, val version: String)
 
 data class UnhealthyService(val name: String, val health: SfHealth, val message: String?)
 
-enum class AppDisplay { CLUSTER_DOWN, NOT_DEPLOYED, IN_PROGRESS, OK, WARNING, ERROR, UNKNOWN }
+enum class AppDisplay { CLUSTER_DOWN, NOT_DEPLOYED, IN_PROGRESS, STARTING, OK, WARNING, ERROR, UNKNOWN }
 
 data class AppView(
     val name: String,
@@ -69,6 +78,128 @@ object SfHealthRules {
         "${baseUrl(host)}/Applications/${appId(name)}/\$/GetHealth?api-version=$API_VERSION"
 
     fun clusterHealthUrl(host: String) = "${baseUrl(host)}/\$/GetClusterHealth?api-version=$API_VERSION"
+
+    fun servicesUrl(host: String, name: String) =
+        "${baseUrl(host)}/Applications/${appId(name)}/\$/GetServices?api-version=$API_VERSION"
+
+    /** [serviceId] is the service `Id` field as returned by GetServices (e.g. `app~svc`). */
+    fun partitionsUrl(host: String, serviceId: String) =
+        "${baseUrl(host)}/Services/${encode(serviceId)}/\$/GetPartitions?api-version=$API_VERSION"
+
+    fun replicasUrl(host: String, partitionId: String) =
+        "${baseUrl(host)}/Partitions/${encode(partitionId)}/\$/GetReplicas?api-version=$API_VERSION"
+
+    private fun encode(s: String): String =
+        java.net.URLEncoder.encode(s, Charsets.UTF_8).replace("+", "%20").replace("%7E", "~")
+
+    private const val SYSTEM_APP = "fabric:/System"
+    private const val MAX_OTHER_APPS = 5
+
+    private fun severity(h: SfHealth) = when (h) {
+        SfHealth.OK -> 0
+        SfHealth.UNKNOWN -> 1
+        SfHealth.WARNING -> 2
+        SfHealth.ERROR -> 3
+    }
+
+    /**
+     * Infrastructure health of `/$/GetClusterHealth`: worst of the nodes and `fabric:/System` (Unknown when both are
+     * missing), plus Warning/Error applications that are neither System nor in [solutionApps]. Throws on malformed JSON.
+     */
+    fun parseInfraHealth(json: String, solutionApps: Collection<String>): Pair<SfHealth, List<Pair<String, SfHealth>>> {
+        val root = JsonParser.parseString(json).asJsonObject
+        val states = mutableListOf<SfHealth>()
+        root.arr("NodeHealthStates")?.forEach { n -> n.obj()?.let { states += parseHealth(it.str("AggregatedHealthState")) } }
+        val others = mutableListOf<Pair<String, SfHealth>>()
+        root.arr("ApplicationHealthStates")?.forEach { a ->
+            val o = a.obj() ?: return@forEach
+            val name = o.str("Name") ?: return@forEach
+            val health = parseHealth(o.str("AggregatedHealthState"))
+            when {
+                name == SYSTEM_APP -> states += health
+                name !in solutionApps && (health == SfHealth.WARNING || health == SfHealth.ERROR) -> others += name to health
+            }
+        }
+        val worst = states.maxByOrNull(::severity) ?: SfHealth.UNKNOWN
+        return worst to others
+    }
+
+    /** Items of a paged REST list; throws on malformed JSON. */
+    private fun items(json: String): List<JsonObject> =
+        JsonParser.parseString(json).asJsonObject.arr("Items")?.mapNotNull { it.obj() } ?: emptyList()
+
+    fun parseServiceIds(json: String): List<String> = items(json).mapNotNull { it.str("Id") }
+
+    /** Partition id to "PartitionStatus is Ready". */
+    fun parsePartitions(json: String): List<Pair<String, Boolean>> = items(json).mapNotNull { p ->
+        val id = p.get("PartitionInformation")?.obj()?.str("Id") ?: return@mapNotNull null
+        id to p.str("PartitionStatus").equals("Ready", true)
+    }
+
+    /** False when the list is empty or any replica/instance is not Ready. */
+    fun replicasReady(json: String): Boolean {
+        val list = items(json)
+        return list.isNotEmpty() && list.all { it.str("ReplicaStatus").equals("Ready", true) }
+    }
+
+    /** Below this remaining budget, the next detail call is skipped (→ FAILED). */
+    const val MIN_CALL_BUDGET_MS = 200L
+
+    /**
+     * Walks services → partitions → replicas of a Ready application, stopping at the first non-Ready element.
+     * No services, no partitions or no replicas → STARTING. Each call gets the [remainingMs] budget as timeout;
+     * any failure or exhausted budget → [StartDetection.FAILED].
+     */
+    fun detectStarting(
+        host: String, name: String, fetch: (url: String, timeoutMs: Int) -> ApiOutcome, remainingMs: () -> Long,
+    ): StartDetection {
+        fun body(url: String): String? {
+            val left = remainingMs()
+            if (left < MIN_CALL_BUDGET_MS) return null
+            val r = fetch(url, left.coerceAtMost(TIMEOUT_MS.toLong()).toInt())
+            if (remainingMs() <= 0 || r !is ApiOutcome.Response || r.code !in 200..299) return null
+            return r.body.ifBlank { "{}" }
+        }
+        return try {
+            val services = parseServiceIds(body(servicesUrl(host, name)) ?: return StartDetection.FAILED)
+            if (services.isEmpty()) return StartDetection.STARTING
+            for (service in services) {
+                val partitions = parsePartitions(body(partitionsUrl(host, service)) ?: return StartDetection.FAILED)
+                if (partitions.isEmpty()) return StartDetection.STARTING
+                for ((pid, ready) in partitions) {
+                    if (!ready) return StartDetection.STARTING
+                    if (!replicasReady(body(replicasUrl(host, pid)) ?: return StartDetection.FAILED)) return StartDetection.STARTING
+                }
+            }
+            StartDetection.READY
+        } catch (_: Exception) {
+            StartDetection.FAILED
+        }
+    }
+
+    /** Whether the detail walk is worth doing this poll (app Ready and something suggests a start). */
+    fun needsDetail(view: AppView, tracked: Boolean, armed: Boolean, previous: AppView?): Boolean {
+        val info = view.info ?: return false
+        if (!info.status.equals("Ready", true)) return false
+        val wasAbsent = previous != null && (previous.display == AppDisplay.NOT_DEPLOYED ||
+            previous.info?.status.equals("Creating", true))
+        return info.health != SfHealth.OK || tracked || armed || wasAbsent
+    }
+
+    /**
+     * Applies the Starting state to a Ready application. [startMs] is the grace start (Rider) or detected start time;
+     * Warning/Error are masked only within [graceMs] of it. In-progress statuses keep their spinner.
+     */
+    fun withStarting(view: AppView, starting: Boolean, startMs: Long?, nowMs: Long, graceMs: Long): AppView {
+        val info = view.info ?: return view
+        if (!starting || !info.status.equals("Ready", true) || view.display == AppDisplay.IN_PROGRESS) return view
+        val masked = when (info.health) {
+            SfHealth.OK -> true
+            SfHealth.WARNING, SfHealth.ERROR -> graceMs > 0 && startMs != null && nowMs - startMs < graceMs
+            SfHealth.UNKNOWN -> false
+        }
+        return if (masked) view.copy(display = AppDisplay.STARTING) else view
+    }
 
     fun parseHealth(value: String?): SfHealth = when (value?.trim()?.lowercase()) {
         "ok" -> SfHealth.OK
@@ -135,10 +266,11 @@ object SfHealthRules {
     fun needsServiceState(api: ApiOutcome): Boolean = api !is ApiOutcome.Response
 
     /** [service] is consulted when the API does not answer (refused, timeout, failure). */
-    fun clusterView(api: ApiOutcome, service: ServiceState?): ClusterView = when (api) {
+    fun clusterView(api: ApiOutcome, service: ServiceState?, solutionApps: Collection<String> = emptyList()): ClusterView = when (api) {
         is ApiOutcome.Response -> if (api.code in 200..299) {
             try {
-                ClusterView(ClusterState.UP, parseAggregated(api.body))
+                val (health, others) = parseInfraHealth(api.body, solutionApps)
+                ClusterView(ClusterState.UP, health, otherUnhealthy = others)
             } catch (e: Exception) {
                 ClusterView(ClusterState.UP, SfHealth.UNKNOWN, "bad JSON: ${e.message}")
             }
@@ -225,7 +357,17 @@ object SfHealthRules {
     /** Tooltip lines; [msg] resolves `health.*` bundle keys. */
     fun tooltipLines(snapshot: HealthSnapshot, msg: (String, Array<out Any>) -> String): List<String> = buildList {
         add(clusterLine(snapshot.cluster, msg))
+        otherAppsLine(snapshot.cluster, msg)?.let { add("  $it") }
         snapshot.apps.forEach { addAll(appLines(it, msg)) }
+    }
+
+    /** "N other application(s) unhealthy: a (Error), …" (at most 5 names), or null. */
+    fun otherAppsLine(c: ClusterView, msg: (String, Array<out Any>) -> String): String? {
+        if (c.state != ClusterState.UP || c.otherUnhealthy.isEmpty()) return null
+        val names = c.otherUnhealthy.take(MAX_OTHER_APPS).joinToString(", ") { (n, h) ->
+            "${n.removePrefix("fabric:/")} (${healthText(h, msg)})"
+        } + if (c.otherUnhealthy.size > MAX_OTHER_APPS) ", \u2026" else ""
+        return msg("health.cluster.otherApps", arrayOf<Any>(c.otherUnhealthy.size, names))
     }
 
     fun clusterLine(c: ClusterView, msg: (String, Array<out Any>) -> String): String {
@@ -243,7 +385,8 @@ object SfHealthRules {
             AppDisplay.CLUSTER_DOWN -> msg(clusterDownKey(a.clusterState), arrayOf(a.name))
             AppDisplay.NOT_DEPLOYED -> msg("health.app.notDeployed", arrayOf(a.name))
             else -> a.info?.let {
-                msg("health.app.line", arrayOf(a.name, it.status, healthText(it.health, msg), it.version))
+                val line = msg("health.app.line", arrayOf(a.name, it.status, healthText(it.health, msg), it.version))
+                if (a.display == AppDisplay.STARTING) "$line (${msg("health.state.starting", emptyArray())})" else line
             } ?: msg("health.app.unknown", arrayOf(a.name))
         }
         add(head)
@@ -276,7 +419,7 @@ object SfHealthRules {
  */
 class ReadyArming {
     private data class Arm(val version: String?, val expiresAt: Long, val streakStart: Long? = null,
-        val lastObservedAt: Long? = null,
+        val lastObservedAt: Long? = null, val graceStart: Long? = null, val graceEnded: Boolean = false,
     )
 
     private val arms = java.util.concurrent.ConcurrentHashMap<String, Arm>()
@@ -326,6 +469,80 @@ class ReadyArming {
             }
         }
         return fire
+    }
+
+    /**
+     * Grace start of an armed app still starting after a Rider deployment, or null. The grace start is set at the first
+     * observation where the app is deployed with status Ready (on the deployed version when known); the Rider start
+     * ends when health is not Ok after [graceMs], or when the arm is consumed/disarmed/expired.
+     */
+    fun riderStart(view: AppView, nowMs: Long, graceMs: Long): Long? {
+        var result: Long? = null
+        arms.computeIfPresent(view.name) { _, a ->
+            val info = view.info
+            when {
+                a.expiresAt <= nowMs -> null
+                a.graceEnded || info == null || !info.status.equals("Ready", true) -> a
+                a.graceStart == null && a.version != null && a.version != info.version -> a
+                else -> {
+                    val start = a.graceStart ?: nowMs
+                    if (info.health != SfHealth.OK && nowMs - start >= graceMs.coerceAtLeast(0L)) {
+                        a.copy(graceStart = start, graceEnded = true)
+                    } else {
+                        result = start
+                        a.copy(graceStart = start)
+                    }
+                }
+            }
+        }
+        return result
+    }
+}
+
+/**
+ * Per-application start detection bookkeeping (detected start time, previous view), polled from one thread.
+ * A FAILED detection keeps a tracked start (still starting); NOT_DEPLOYED or cluster down forgets it.
+ */
+class StartTracker {
+    private val starts = HashMap<String, Long>()
+    private val previous = HashMap<String, AppView>()
+
+    fun startOf(app: String): Long? = starts[app]
+
+    /** Forgets apps not in [polled]. */
+    fun prune(polled: Collection<String>) {
+        starts.keys.retainAll(polled.toSet())
+        previous.keys.retainAll(polled.toSet())
+    }
+
+    fun needsDetail(view: AppView, armed: Boolean): Boolean =
+        view.display != AppDisplay.CLUSTER_DOWN &&
+            SfHealthRules.needsDetail(view, view.name in starts, armed, previous[view.name])
+
+    /** Records this poll's [view] and [detection] (null = not queried) and returns the displayed view. */
+    fun apply(view: AppView, riderStart: Long?, detection: StartDetection?, nowMs: Long, graceMs: Long): AppView {
+        val name = view.name
+        if (view.display == AppDisplay.CLUSTER_DOWN || view.display == AppDisplay.NOT_DEPLOYED) {
+            starts.remove(name)
+            previous.remove(name)
+            if (view.display == AppDisplay.NOT_DEPLOYED) previous[name] = view
+            return view
+        }
+        previous[name] = view
+        val detected = when (detection) {
+            StartDetection.STARTING -> {
+                starts.putIfAbsent(name, nowMs)
+                true
+            }
+            StartDetection.READY -> {
+                starts.remove(name)
+                false
+            }
+            StartDetection.FAILED -> name in starts
+            null -> false
+        }
+        val startMs = riderStart ?: starts[name].takeIf { detected }
+        return SfHealthRules.withStarting(view, riderStart != null || detected, startMs, nowMs, graceMs)
     }
 }
 

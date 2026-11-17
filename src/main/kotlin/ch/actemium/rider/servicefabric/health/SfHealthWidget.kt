@@ -16,6 +16,7 @@ import com.intellij.openapi.wm.StatusBarWidgetFactory
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.HyperlinkLabel
 import com.intellij.ui.JBColor
+import com.intellij.ui.RowIcon
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.ColorIcon
@@ -102,6 +103,9 @@ class SfHealthWidget(private val project: Project) : CustomStatusBarWidget {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = JBUI.Borders.empty(8)
             add(JBLabel(SfHealthRules.clusterLine(snapshot.cluster, ::msg), clusterIcon(snapshot.cluster), JBLabel.LEFT))
+            SfHealthRules.otherAppsLine(snapshot.cluster, ::msg)?.let {
+                add(JBLabel(it).apply { border = JBUI.Borders.emptyLeft(20) })
+            }
             snapshot.apps.forEach { app ->
                 val lines = SfHealthRules.appLines(app, ::msg)
                 add(JBLabel(lines.first(), appIcon(app.display), JBLabel.LEFT))
@@ -131,6 +135,7 @@ class SfHealthWidget(private val project: Project) : CustomStatusBarWidget {
         private val YELLOW = JBColor(Color(0xE2A53A), Color(0xF0A732))
         private val RED = JBColor(Color(0xDB5860), Color(0xC75450))
         private val GREY = JBColor(Color(0x9AA7B0), Color(0x6E6E6E))
+        private val ORANGE = JBColor(Color(0xE07B39), Color(0xF08A4B))
 
         private fun dot(color: Color): Icon = ColorIcon(JBUI.scale(10), color)
 
@@ -149,6 +154,7 @@ class SfHealthWidget(private val project: Project) : CustomStatusBarWidget {
 
         fun appIcon(d: AppDisplay): Icon = when (d) {
             AppDisplay.IN_PROGRESS -> AnimatedIcon.Default.INSTANCE
+            AppDisplay.STARTING -> RowIcon(dot(ORANGE), AnimatedIcon.Default.INSTANCE)
             AppDisplay.OK -> dot(GREEN)
             AppDisplay.WARNING -> dot(YELLOW)
             AppDisplay.ERROR -> dot(RED)

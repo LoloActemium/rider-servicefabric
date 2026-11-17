@@ -13,6 +13,7 @@ class SfSettingsState : BaseState() {
     var removeFromClusterOnRiderClean by property(true)
     var healthPollSeconds by property(SfSettings.DEFAULT_POLL_SECONDS)
     var readyStableSeconds by property(SfSettings.DEFAULT_READY_STABLE_SECONDS)
+    var startupGraceSeconds by property(SfSettings.DEFAULT_STARTUP_GRACE_SECONDS)
 }
 
 @Service(Service.Level.APP)
@@ -41,7 +42,15 @@ class SfSettings : SimplePersistentStateComponent<SfSettingsState>(SfSettingsSta
         get() = state.readyStableSeconds.coerceIn(MIN_READY_STABLE_SECONDS, MAX_READY_STABLE_SECONDS)
         set(value) { state.readyStableSeconds = value.coerceIn(MIN_READY_STABLE_SECONDS, MAX_READY_STABLE_SECONDS) }
 
+    /** Startup grace period during which Warning/Error of a starting application are shown as Starting (0 = never mask). */
+    var startupGraceSeconds: Int
+        get() = state.startupGraceSeconds.coerceIn(MIN_STARTUP_GRACE_SECONDS, MAX_STARTUP_GRACE_SECONDS)
+        set(value) { state.startupGraceSeconds = value.coerceIn(MIN_STARTUP_GRACE_SECONDS, MAX_STARTUP_GRACE_SECONDS) }
+
     companion object {
+        const val DEFAULT_STARTUP_GRACE_SECONDS = 120
+        const val MIN_STARTUP_GRACE_SECONDS = 0
+        const val MAX_STARTUP_GRACE_SECONDS = 1800
         const val DEFAULT_READY_STABLE_SECONDS = 30
         const val MIN_READY_STABLE_SECONDS = 0
         const val MAX_READY_STABLE_SECONDS = 600

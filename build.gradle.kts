@@ -153,16 +153,21 @@ tasks.register<Exec>("githubRelease") {
     val zip = tasks.buildPlugin.flatMap { it.archiveFile }
     val updates = layout.buildDirectory.file("distributions/updatePlugins.xml")
     val notes = changeNotesMarkdown
+    val notesFile = layout.buildDirectory.file("release-notes.md")
     inputs.file(zip)
     inputs.file(updates)
     executable = "gh"
+    // Notes go through a file: double quotes in the text break Windows command-line quoting.
+    doFirst {
+        notesFile.get().asFile.writeText(notes.get().ifBlank { "Azure Service Fabric plugin for Rider $tag." })
+    }
     argumentProviders.add(CommandLineArgumentProvider {
         listOf(
             "release", "create", tag,
             zip.get().asFile.absolutePath,
             updates.get().asFile.absolutePath,
             "--title", tag,
-            "--notes", notes.get().ifBlank { "Azure Service Fabric plugin for Rider $tag." },
+            "--notes-file", notesFile.get().asFile.absolutePath,
         )
     })
 }

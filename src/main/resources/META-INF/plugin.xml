@@ -46,7 +46,7 @@
                class="ch.actemium.rider.servicefabric.actions.SfProjectActionGroup"
                icon="/icons/serviceFabric.svg"
                popup="true">
-            <add-to-group group-id="SolutionExplorerPopupMenu" anchor="last"/>
+            <add-to-group group-id="SolutionExplorerPopupMenu" anchor="after" relative-to-action="AdvancedBuildActions"/>
             <action id="ServiceFabric.Package"
                     class="ch.actemium.rider.servicefabric.actions.SfPackageAction"/>
             <action id="ServiceFabric.Publish"

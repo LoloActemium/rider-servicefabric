@@ -2,10 +2,7 @@
     <id>ch.actemium.rider.servicefabric</id>
     <name>Azure Service Fabric</name>
     <vendor>Actemium</vendor>
-    <description><![CDATA[
-        Package and publish Azure Service Fabric applications (<code>.sfproj</code>) from JetBrains Rider,
-        without Visual Studio.
-    ]]></description>
+    <!-- <description> is injected at build time from docs/plugin-description.html -->
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.rider</depends>

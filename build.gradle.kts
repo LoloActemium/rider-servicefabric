@@ -24,6 +24,7 @@ fun changelogSection(type: Changelog.OutputType): String = with(changelog) {
 
 val changeNotesHtml = providers.provider { changelogSection(Changelog.OutputType.HTML) }
 val changeNotesMarkdown = providers.provider { changelogSection(Changelog.OutputType.MARKDOWN) }
+val pluginDescriptionHtml = providers.fileContents(layout.projectDirectory.file("docs/plugin-description.html")).asText
 
 kotlin {
     jvmToolchain(25)
@@ -65,6 +66,7 @@ intellijPlatform {
         name = "Azure Service Fabric"
         version = project.version.toString()
         changeNotes = changeNotesHtml
+        description = pluginDescriptionHtml
         ideaVersion {
             sinceBuild = "263"
             untilBuild = "263.*"
@@ -99,11 +101,13 @@ val generateUpdatePlugins = tasks.register("generateUpdatePlugins") {
     val repositoryDir = pluginRepositoryDir
     val output = layout.buildDirectory.file("distributions/updatePlugins.xml")
     val notes = changeNotesHtml
+    val pluginDescription = pluginDescriptionHtml
     inputs.file(archive)
     inputs.property("version", pluginVersion)
     inputs.property("baseUrl", baseUrl)
     inputs.property("repositoryDir", repositoryDir)
     inputs.property("changeNotes", notes)
+    inputs.property("description", pluginDescription)
     outputs.file(output)
     doLast {
         val zip = archive.get().asFile
@@ -122,7 +126,7 @@ val generateUpdatePlugins = tasks.register("generateUpdatePlugins") {
             |    <idea-version since-build="263" until-build="263.*"/>
             |    <name>Azure Service Fabric</name>
             |    <vendor>Actemium</vendor>
-            |    <description>Package and publish Azure Service Fabric applications from Rider.</description>
+            |    <description><![CDATA[${pluginDescription.get()}]]></description>
             |    <change-notes><![CDATA[${notes.get()}]]></change-notes>
             |  </plugin>
             |</plugins>

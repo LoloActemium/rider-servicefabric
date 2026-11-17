@@ -6,13 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
-
 ### Changed
 
-### Fixed
-
-### Removed
+- Richer plugin description in Rider's plugin manager (features, getting started, requirements).
 
 ## [0.1.17] - 2026-11-17
 

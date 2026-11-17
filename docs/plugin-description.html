@@ -1,0 +1,45 @@
+<p><b>Package, publish, debug and monitor your Azure Service Fabric applications without leaving JetBrains Rider.</b></p>
+
+<p>Visual Studio has always shipped first-class tooling for Service Fabric. This plugin brings the everyday workflow to
+Rider: right-click your <code>.sfproj</code>, publish to your local cluster, hit <b>Debug</b> and land on your
+breakpoints in every service.</p>
+
+<h3>Features</h3>
+<ul>
+  <li><b>Package</b> &ndash; builds the application package with the right configuration and platform, with a live
+    console and cancellation.</li>
+  <li><b>Publish</b> &ndash; publish dialog with profiles, upgrade / overwrite options and parameters; runs
+    <code>Deploy-FabricApplication.ps1</code> for you.</li>
+  <li><b>Run &amp; Debug</b> &ndash; a <i>Service Fabric Application</i> run configuration (auto-created).
+    <b>Debug</b> deploys, then attaches the .NET debugger to <b>every</b> service process: actors, stateless and
+    stateful services.</li>
+  <li><b>Safe while debugging</b> &ndash; Run/Debug are disabled during a debug session; Publish and Clean warn you
+    and stop the sessions first.</li>
+  <li><b>Clean</b> &ndash; removes the application and its type from the local cluster, runs MSBuild Clean and deletes
+    <code>pkg</code>. Rider's own <i>Build &rsaquo; Clean</i> removes the application from the local cluster too, like
+    Visual Studio.</li>
+  <li><b>Edit Versions</b> &ndash; edit application, service and package versions in one dialog, with automatic
+    roll-up; a single undo restores everything.</li>
+  <li><b>Manifest IntelliSense</b> &ndash; completion and validation in <code>ApplicationManifest.xml</code>,
+    <code>ServiceManifest.xml</code>, <code>Settings.xml</code> and parameter files, from the SDK schemas.</li>
+  <li><b>Live cluster health</b> &ndash; status bar widget with the local cluster state and each application's health,
+    same colors as Service Fabric Explorer, an orange <i>starting</i> state, and a notification when your application
+    is really ready.</li>
+  <li><b>Environment check</b> &ndash; detects the SDK, the PowerShell module and the local cluster, and tells you
+    what is missing.</li>
+</ul>
+
+<h3>Getting started</h3>
+<ol>
+  <li>Open a solution containing a Service Fabric application project (<code>.sfproj</code>).</li>
+  <li>Right-click the project &rsaquo; <b>Service Fabric</b> (right after <i>Advanced Build Actions</i>).</li>
+  <li>Pick <b>Publish&hellip;</b>, or use the auto-created run configuration and press <b>Debug</b>.</li>
+  <li>Watch the status bar: orange while the services start, green when the application is ready.</li>
+</ol>
+
+<p>Settings: <i>Settings &rsaquo; Tools &rsaquo; Service Fabric</i>.</p>
+
+<p><b>Requirements:</b> Windows, the Azure Service Fabric SDK and a local development cluster. To debug services on the
+local cluster, run Rider as administrator (same as Visual Studio).</p>
+
+<p><a href="https://github.com/LoloActemium/rider-servicefabric">Source code, documentation and releases on GitHub</a></p>

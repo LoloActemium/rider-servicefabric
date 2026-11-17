@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Start Local Cluster** / **Stop Local Cluster** in the Service Fabric menu (starts or stops the `FabricHostSvc`
+  service, through UAC when needed; Stop asks for confirmation and stops Service Fabric debug sessions first).
+
 ### Changed
 
 - Richer plugin description in Rider's plugin manager (features, getting started, requirements).

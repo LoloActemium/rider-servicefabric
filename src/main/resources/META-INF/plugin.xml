@@ -63,6 +63,12 @@
             <action id="ServiceFabric.RecheckEnvironment"
                     class="ch.actemium.rider.servicefabric.actions.SfRecheckEnvironmentAction"
                     icon="AllIcons.Actions.Refresh"/>
+            <action id="ServiceFabric.StartLocalCluster"
+                    class="ch.actemium.rider.servicefabric.actions.SfStartClusterAction"
+                    icon="AllIcons.Actions.Execute"/>
+            <action id="ServiceFabric.StopLocalCluster"
+                    class="ch.actemium.rider.servicefabric.actions.SfStopClusterAction"
+                    icon="AllIcons.Actions.Suspend"/>
         </group>
     </actions>
 </idea-plugin>

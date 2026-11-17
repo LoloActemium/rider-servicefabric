@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
+## [0.1.17] - 2026-11-17
+
+### Added
+
+- Plugin logo in Rider's plugin manager.
+
 ## [0.1.16] - 2026-11-17
 
 ### Added
@@ -128,7 +134,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - First version: Service Fabric project detection and context menu, settings, Package and Publish actions,
   environment diagnostics with Re-check, Service Fabric icons.
 
-[Unreleased]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.13...v0.1.14

@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.16] - 2026-11-17
+
+### Added
+
 - Icons on the Service Fabric menu actions (Package, Publish, Clean, Edit Versions, Create Run Configuration,
   Re-check Environment).
 - "What's New" notes in Rider and GitHub release notes, generated from this changelog.
@@ -118,5 +128,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - First version: Service Fabric project detection and context menu, settings, Package and Publish actions,
   environment diagnostics with Re-check, Service Fabric icons.
 
-[Unreleased]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.15...HEAD
-[0.1.15]: https://github.com/LoloActemium/rider-servicefabric/releases/tag/v0.1.15
+[Unreleased]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.15...v0.1.16
+[0.1.15]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.14...v0.1.15
+[0.1.14]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.13...v0.1.14
+[0.1.13]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.12...v0.1.13
+[0.1.12]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.11...v0.1.12
+[0.1.11]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.10...v0.1.11
+[0.1.10]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.9...v0.1.10
+[0.1.9]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/LoloActemium/rider-servicefabric/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/LoloActemium/rider-servicefabric/commits/v0.1.2
